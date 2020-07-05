@@ -116,7 +116,7 @@ async function getItem(type, itemName, existingQuery) {
 exports.commands = {
 	weapon: async function (args, channel) {
 		const [item, maxLevel] = args.split('/');
-		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send('Usage: /weapon `[name]` / `[max level (optional)]`');
+		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${process.env.COMMAND_TOKEN}weapon \`[name]\` / \`[max level (optional)]\``);
 
 		const maxLevelQuery = {};
 		if (maxLevel) maxLevelQuery.level = { $lte: Number(maxLevel) };
@@ -152,7 +152,7 @@ exports.commands = {
 	acc: 'accessory',
 	accessory: async function (args, channel) {
 		const [item, maxLevel] = args.split('/');
-		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send('Usage: /accessory `[name]` / `[max level (optional)]`');
+		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${process.env.COMMAND_TOKEN}accessory \`[name]\` / \`[max level (optional)]\``);
 
 		const maxLevelQuery = {};
 		if (maxLevel) maxLevelQuery.level = { $lte: Number(maxLevel) };
