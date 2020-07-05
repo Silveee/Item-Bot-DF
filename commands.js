@@ -190,67 +190,67 @@ exports.commands = {
 		});
 	},
 
-	search: 'query',
-	query: async function (args, channel) {
-		args = args.trim();
-		if (!args)
-			return channel.send('');
-		const categories = { weapon: args.slice(0, 6).toLowerCase(), accessory: args.slice(0, 9).toLowerCase() };
-		const isWeapon = categories.weapon === 'weapon';
-		if (!isWeapon && categories.accessory !== 'accessory')
-			return channel.send('Specify whether you\'re searching for a weapon or an accessory.');
+	// search: 'query',
+	// query: async function (args, channel) {
+	// 	args = args.trim();
+	// 	if (!args)
+	// 		return channel.send('');
+	// 	const categories = { weapon: args.slice(0, 6).toLowerCase(), accessory: args.slice(0, 9).toLowerCase() };
+	// 	const isWeapon = categories.weapon === 'weapon';
+	// 	if (!isWeapon && categories.accessory !== 'accessory')
+	// 		return channel.send('Specify whether you\'re searching for a weapon or an accessory.');
 
-		const category = isWeapon ? 'weapons' : 'accessories';
-		args = args.substr((isWeapon ? 6 : 9) + 1);
-		if (args.slice(0, 2) !== '--') return;
-		args = args.slice(2).split('--');
+	// 	const category = isWeapon ? 'weapons' : 'accessories';
+	// 	args = args.substr((isWeapon ? 6 : 9) + 1);
+	// 	if (args.slice(0, 2) !== '--') return;
+	// 	args = args.slice(2).split('--');
 
-		const filter = { tags: { $ne: 'temporary' } };
-		const sortBy = { level: -1 };
+	// 	const filter = { tags: { $ne: 'temporary' } };
+	// 	const sortBy = { level: -1 };
 
-		for (const line of args) {
-			const firstSpace = line.indexOf(' ');
-			const arg = firstSpace > -1 ? line.slice(0, firstSpace) : line;
-			const value = firstSpace > -1 ? line.slice(firstSpace + 1) : '';
+	// 	for (const line of args) {
+	// 		const firstSpace = line.indexOf(' ');
+	// 		const arg = firstSpace > -1 ? line.slice(0, firstSpace) : line;
+	// 		const value = firstSpace > -1 ? line.slice(firstSpace + 1) : '';
 
-			if (arg === 'name') {
-				const name = sanitizeName(value);
-				if (!name) return channel.send('`name` is not valid.');
-				filter.$or = [{ $text: { $search: '"' + name + '"' } }, { name }];
-			}
-			else if (arg === 'type') {
-				const type = value.trim().toLowerCase();
-				if (isWeapon && !(type in { 'key':1, 'axe':1, 'sword':1, 'mace':1, 'dagger':1, 'staff':1, 'wand':1, 'scythe':1 })) return channel.send('`type` is invalid.');
-				else if (!(type in { 'cape':1, 'belt':1, 'necklace':1, 'helm':1, 'trinket':1, 'bracer':1 })) return channel.send('`type` is invalid.');
-				filter.type = type;
-			}
-			else if (arg === 'tags') {
-				const tags = value.split(',').map(t => t.trim().toLowerCase());
-				filter.tags = { $all: tags };
-			}
-			else if (arg === 'element') {
-				if (!isWeapon) return channel.send('Invalid argument "element"');
-				const elements = value.split(',').map(t => t.toLowerCase().trim());
-				filter.elements = { $all: elements };
-			}
-			else return channel.send(`Invalid argument "${arg}"`);
-		}
-		const db = await connect();
-		const items = await db.collection(category);
+	// 		if (arg === 'name') {
+	// 			const name = sanitizeName(value);
+	// 			if (!name) return channel.send('`name` is not valid.');
+	// 			filter.$or = [{ $text: { $search: '"' + name + '"' } }, { name }];
+	// 		}
+	// 		else if (arg === 'type') {
+	// 			const type = value.trim().toLowerCase();
+	// 			if (isWeapon && !(type in { 'key':1, 'axe':1, 'sword':1, 'mace':1, 'dagger':1, 'staff':1, 'wand':1, 'scythe':1 })) return channel.send('`type` is invalid.');
+	// 			else if (!(type in { 'cape':1, 'belt':1, 'necklace':1, 'helm':1, 'trinket':1, 'bracer':1 })) return channel.send('`type` is invalid.');
+	// 			filter.type = type;
+	// 		}
+	// 		else if (arg === 'tags') {
+	// 			const tags = value.split(',').map(t => t.trim().toLowerCase());
+	// 			filter.tags = { $all: tags };
+	// 		}
+	// 		else if (arg === 'element') {
+	// 			if (!isWeapon) return channel.send('Invalid argument "element"');
+	// 			const elements = value.split(',').map(t => t.toLowerCase().trim());
+	// 			filter.elements = { $all: elements };
+	// 		}
+	// 		else return channel.send(`Invalid argument "${arg}"`);
+	// 	}
+	// 	const db = await connect();
+	// 	const items = await db.collection(category);
 
-		const pipeline = [
-			{ $match: filter },
-			{ $group: { _id: { link: '$name', level: '$level' }, doc: { $first: '$$ROOT' } } },
-			{ $replaceRoot: { newRoot: '$doc' } },
-			{ $sort: sortBy }, { $limit : 15 },
-		];
-		const results = items.aggregate(pipeline);
+	// 	const pipeline = [
+	// 		{ $match: filter },
+	// 		{ $group: { _id: { link: '$name', level: '$level' }, doc: { $first: '$$ROOT' } } },
+	// 		{ $replaceRoot: { newRoot: '$doc' } },
+	// 		{ $sort: sortBy }, { $limit : 15 },
+	// 	];
+	// 	const results = items.aggregate(pipeline);
 
-		const message = [];
-		let item = null;
-		while ((item = (await results.next())) !== null) 
-			message.push(`**${item.title}:** ${item.link} *(lv. ${item.level})*`);
+	// 	const message = [];
+	// 	let item = null;
+	// 	while ((item = (await results.next())) !== null) 
+	// 		message.push(`**${item.title}:** ${item.link} *(lv. ${item.level})*`);
 
-		channel.send(message.join('\n') || 'No results were found.');
-	}
+	// 	channel.send(message.join('\n') || 'No results were found.');
+	// }
 };
