@@ -114,6 +114,7 @@ async function getItem(type, itemName, existingQuery) {
 // }
 
 exports.commands = {
+	wep: 'weapon',
 	weapon: async function (args, channel) {
 		const [item, maxLevel] = args.split('/');
 		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${process.env.COMMAND_TOKEN}weapon \`[name]\` / \`[max level (optional)]\``);
