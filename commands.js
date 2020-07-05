@@ -119,7 +119,7 @@ exports.commands = {
 		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send('Usage: /weapon `[name]` / `[max level (optional)]`');
 
 		const maxLevelQuery = {};
-		if (maxLevel) maxLevelQuery.$lte = Number(maxLevel);
+		if (maxLevel) maxLevelQuery.level = { $lte: Number(maxLevel) };
 		const weapon = await getItem('weapons', item, maxLevelQuery);
 		if (!weapon) return channel.send('No weapon was found');
 		const description = [
@@ -155,7 +155,7 @@ exports.commands = {
 		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send('Usage: /accessory `[name]` / `[max level (optional)]`');
 
 		const maxLevelQuery = {};
-		if (maxLevel) maxLevelQuery.$lte = Number(maxLevel);
+		if (maxLevel) maxLevelQuery.level = { $lte: Number(maxLevel) };
 		const accessory = await getItem('accessories', item, maxLevelQuery);
 		if (!accessory) return channel.send('No accessory was found.');
 
@@ -193,6 +193,8 @@ exports.commands = {
 	search: 'query',
 	query: async function (args, channel) {
 		args = args.trim();
+		if (!args)
+			return channel.send('');
 		const categories = { weapon: args.slice(0, 6).toLowerCase(), accessory: args.slice(0, 9).toLowerCase() };
 		const isWeapon = categories.weapon === 'weapon';
 		if (!isWeapon && categories.accessory !== 'accessory')
