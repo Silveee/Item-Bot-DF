@@ -4,13 +4,15 @@
   "description": "",
   "main": "scrape.js",
   "dependencies": {
+    "bufferutil": "^4.0.1",
     "cheerio": "^1.0.0-rc.3",
     "discord.js": "^12.2.0",
     "dotenv": "^8.2.0",
     "minimist": "^1.2.5",
     "mongodb": "^3.5.9",
     "nightmare": "^3.0.2",
-    "unescape": "^1.0.1"
+    "unescape": "^1.0.1",
+    "utf-8-validate": "^5.0.2"
   },
   "devDependencies": {},
   "scripts": {
