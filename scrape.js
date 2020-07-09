@@ -151,12 +151,12 @@ function getWeaponData(post, link) {
 	const itemType = getItemType(body);
 	const { bonuses, resists } = getBoosts(body);
 	const specials = [];
-	const specialsList = body.match(/Special Activation:.+?Special Rate: .+?% +<br>/gi);
+	const specialsList = body.match(/Special Activation:.+?Special Rate: .+? +<br>/gi);
 	for (const special of specialsList || []) {
 		const specialData = {};
 		let [, activation] = special.match(/special activation: +(.+?) +<br>/i);
 		if (activation.match(/attack/i)) specialData.activation = 'attack button';
-		else if (activation.match(/hit/i)) specialData.activation = 'on-hit';
+		else if (activation.match(/(?:hit)|(?:crit)/i)) specialData.activation = 'on-hit';
 		else if (activation.match(/click/i)) specialData.activation = 'click weapon';
 		else if (activation.match(/enemies/i)) specialData.activation = 'specific enemy';
 
@@ -171,8 +171,8 @@ function getWeaponData(post, link) {
 				specialData.elements = elementMatch.split('/').map(element => element.trim().toLowerCase());
 		}
 
-		const [, rate] = special.match(/special rate: +(.+?)%/i);
-		specialData.rate = (Number(rate) || parseInt(rate)) / 100;
+		const [, rate] = special.match(/special rate: +(.+?)%/i) || [];
+		specialData.rate = (Number(rate) || parseInt(rate) || 100) / 100;
 
 		specials.push(specialData);
 	}
@@ -226,10 +226,10 @@ async function getAccessoryData(post, link) {
 
 async function fetchItemPage(link, category, collection) {
 	// Fetches all accessories from a page and adds them to a mongoDB collection if specified
+	const getData = { 'weapons': getWeaponData, 'accessories': getAccessoryData };
 	const posts = await fetchPosts(link);
 	posts.each(async (_, post) => {
 		try {
-			const getData = { 'weapons': getWeaponData, 'accessories': getAccessoryData };
 			const items = await getData[category](post, link);
 			if (!items.length) return;
 			if (collection)
