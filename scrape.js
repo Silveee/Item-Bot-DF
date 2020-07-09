@@ -160,8 +160,10 @@ function getWeaponData(post, link) {
 		else if (activation.match(/click/i)) specialData.activation = 'click weapon';
 		else if (activation.match(/enemies/i)) specialData.activation = 'specific enemy';
 
-		const [, effect] = special.match(/special (?:(?:effect)|(?:damage)): +(.+?) +<br>/i);
-		specialData.effect = decode(effect);
+		const [, effectText] = special.match(/special (?:(?:effect)|(?:damage)): +(.+?) +<br>/i);
+		const effect = cheerio.load(effectText)('body');
+		effect.find('s').remove();
+		specialData.effect = decode(effect.text().replace(/ +/g, ' '));
 		if (specialData.activation === 'specific enemy') specialData.effect += ` (${activation})`;
 
 		specialData.elements = [];
@@ -228,6 +230,7 @@ async function fetchItemPage(link, category, collection) {
 	// Fetches all accessories from a page and adds them to a mongoDB collection if specified
 	const getData = { 'weapons': getWeaponData, 'accessories': getAccessoryData };
 	const posts = await fetchPosts(link);
+	if (collection) await collection.deleteMany({ link });
 	posts.each(async (_, post) => {
 		try {
 			const items = await getData[category](post, link);
