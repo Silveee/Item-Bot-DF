@@ -48,7 +48,7 @@ function capitalize(word) {
 }
 function sanitizeName(name) {
 	// Lowercases names, removes leading and trailing whitespace, and removes unnecessary characters
-	return name.toLowerCase().replace(/[.,\-"]/g, ' ').replace(/ +/g, ' ').trim();
+	return name.toLowerCase().replace(/[.,\-"()]/g, ' ').replace(/ +/g, ' ').trim();
 }
 function formatBoosts(boosts) {
 	// Displays resistances and bonuses the correct way

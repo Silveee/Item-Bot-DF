@@ -10,8 +10,7 @@ const decode = require('unescape');
 const connection = require('./db')();
 
 function sanitizeName(name) {
-
-	return name.toLowerCase().replace(/[.,\-"]/g, ' ').replace(/ +/g, ' ').trim();
+	return name.toLowerCase().replace(/[.,\-"()]/g, ' ').replace(/ +/g, ' ').trim();
 }
 
 function fetchContent(url) {
