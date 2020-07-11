@@ -15,7 +15,7 @@ const aliases = {
 	'uok': 'ultra omniknight blade',
 	'ublod': 'ultimate blinding light of destiny',
 	'fc': 'frozen claymore',
-	'nstb': 'not-so-tiny bubbles',
+	'nstb': 'not so tiny bubbles',
 	'ba': 'baltael\'s aventail',
 	'npsb': 'necro paragon soulblade',
 	'gg': 'forgotten gloom glaive',
@@ -33,6 +33,9 @@ const aliases = {
 	'ricterild': 'summon gem ricterild ex',
 	'roktoru': 'summon gem roktoru ex',
 	'aya': 'summon gem ayauhnqui ex',
+	'gt': 'grove tender',
+	'sf': 'soulforged scythe',
+	'lh': 'lucky hammer',
 };
 
 function capitalize(word) {
