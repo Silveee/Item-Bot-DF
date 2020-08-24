@@ -9,6 +9,13 @@ const fs = require('fs');
 const decode = require('unescape');
 const connection = require('./db')();
 
+async function applyAsync(array, operation, ...additionalArguments) {
+	const promises = [];
+	for (const element of array)
+		promises.push(operation(element, ...additionalArguments));
+	await Promise.all(promises);
+}
+
 function sanitizeName(name) {
 	return name.toLowerCase().replace(/[.,\-"()]/g, ' ').replace(/ +/g, ' ').trim();
 }
@@ -230,7 +237,7 @@ async function fetchItemPage(link, category, collection) {
 	const getData = { 'weapons': getWeaponData, 'accessories': getAccessoryData };
 	const posts = await fetchPosts(link);
 	if (collection) await collection.deleteMany({ link });
-	posts.each(async (_, post) => {
+	await applyAsync(posts.toArray(), async post => {
 		try {
 			const items = await getData[category](post, link);
 			if (!items.length) return;
@@ -280,12 +287,7 @@ connection.then(async db => {
 			}
 			links = links.split(',').map(link => link.trim());
 			console.log(`Adding ${type} to the database...`);
-			const promises = [];
-			for (const link of links) {
-				const item = fetchItemPage(link, type, type[0] === 'a' ? accessories : weapons);
-				promises.push(item);
-			}
-			await Promise.all(promises);
+			await applyAsync(links, fetchItemPage, type, type[0] === 'a' ? accessories : weapons);
 			console.log(`${type} added successfully.`);
 		}
 		else if (command in { 'addallweapons':1, 'addallaccessories':1, 'addall':1 }) {
