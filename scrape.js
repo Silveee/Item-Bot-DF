@@ -251,6 +251,7 @@ async function fetchItemPage(link, category, collection) {
 	});
 }
 
+console.log('Connecting to database...');
 connection.then(async db => {
 	console.log('Database connection successful');
 
@@ -277,8 +278,13 @@ connection.then(async db => {
 		separator = separator > -1 ? separator: input.length;
 		command = input.slice(0, separator);
 
-		if (command === 'commands') console.log(commands);
-		else if (command === 'addweapon' || command === 'addaccessory') {
+		switch (command) {
+		case 'commands':
+			console.log(commands);
+			break;
+
+		case 'addweapon':
+		case 'addaccessory': {
 			const type = command === 'addaccessory' ? 'accessories' : 'weapons';
 			let links = input.slice(separator + 1).trim();
 			if (!links) {
@@ -288,40 +294,52 @@ connection.then(async db => {
 			links = links.split(',').map(link => link.trim());
 			console.log(`Adding ${type} to the database...`);
 			await applyAsync(links, fetchItemPage, type, type[0] === 'a' ? accessories : weapons);
-			console.log(`${type} added successfully.`);
+			console.log(`${type[0].toUpperCase() + type.slice(1)} added successfully.\n`);
+			break;
 		}
-		else if (command in { 'addallweapons':1, 'addallaccessories':1, 'addall':1 }) {
+
+		case 'addall':
+		case 'addallweapons': {
 			let pageIndex = 0;
-			if (command in {'addall':1, 'addallweapons':1}) {
-				while (true) {
-					const anchors = await fetchLinks('https://forums2.battleon.com/f/tt.asp?forumid=119', ++pageIndex);
-					if (!anchors.length) break;
-					anchors.each(async (_, a) => {
-						const link = 'https://forums2.battleon.com/f/' + a.attribs.href;
-						fetchItemPage(link, 'weapons', weapons);
-					});
-				}
+			while (true) {
+				const anchors = await fetchLinks('https://forums2.battleon.com/f/tt.asp?forumid=119', ++pageIndex);
+				if (!anchors.length) break;
+				anchors.each(async (_, a) => {
+					const link = 'https://forums2.battleon.com/f/' + a.attribs.href;
+					fetchItemPage(link, 'weapons', weapons);
+				});
 			}
-			if (command in {'addall':1, 'addallaccessories':1}) {
-				pageIndex = 0;
-				while (true) {
-					const anchors = await fetchLinks('https://forums2.battleon.com/f/tt.asp?forumid=118', ++pageIndex);
-					if (!anchors.length) break;
-					anchors.each(async (_, a) => {
-						const link = 'https://forums2.battleon.com/f/' + a.attribs.href;
-						fetchItemPage(link, 'accessories', accessories);
-					});
-				}
-			}
+			// conditional break: fall through only if command is 'addall'
+			if (command !== 'addallweapons') break;
 		}
-		else if (command === 'deleteall') {
+
+		// eslint-disable-next-line no-fallthrough
+		case 'addallaccessories': {
+			let pageIndex = 0;
+			while (true) {
+				const anchors = await fetchLinks('https://forums2.battleon.com/f/tt.asp?forumid=118', ++pageIndex);
+				if (!anchors.length) break;
+				anchors.each(async (_, a) => {
+					const link = 'https://forums2.battleon.com/f/' + a.attribs.href;
+					fetchItemPage(link, 'accessories', accessories);
+				});
+			}
+			break;
+		}
+
+		case 'deleteall':
 			console.log('Deleting all items..');
 			await Promise.all([accessories.deleteMany({}), weapons.deleteMany({})]);
 			console.log('All items have been removed from the database.');
-		}
-		else if (command === 'exit') console.log('bye');
-		else
+			break;
+
+		case 'exit':
+			console.log('bye');
+			break;
+
+		default:
 			console.log('Unrecognized command.');
+		}
 
 	} while (command !== 'exit');
 
