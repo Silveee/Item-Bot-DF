@@ -122,10 +122,11 @@ exports.commands = {
 		const [item, maxLevel] = args.split('/');
 		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${process.env.COMMAND_TOKEN}weapon \`[name]\` / \`[max level (optional)]\``);
 
-		const maxLevelQuery = {};
-		if (maxLevel) maxLevelQuery.level = { $lte: Number(maxLevel) };
-		const weapon = await getItem('weapons', item, maxLevelQuery);
+		const query = { tags: { $ne: 'temporary' } };
+		if (maxLevel) query.level = { $lte: Number(maxLevel) };
+		const weapon = await getItem('weapons', item, query);
 		if (!weapon) return channel.send('No weapon was found');
+
 		const description = [
 			`**Tags:** ${weapon.tags.map(capitalize).join(', ') || 'None'}`,
 			`**Level:** ${weapon.level}`,
@@ -158,9 +159,9 @@ exports.commands = {
 		const [item, maxLevel] = args.split('/');
 		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${process.env.COMMAND_TOKEN}accessory \`[name]\` / \`[max level (optional)]\``);
 
-		const maxLevelQuery = {};
-		if (maxLevel) maxLevelQuery.level = { $lte: Number(maxLevel) };
-		const accessory = await getItem('accessories', item, maxLevelQuery);
+		const query = { tags: { $ne: 'temporary' } };
+		if (maxLevel) query.level = { $lte: Number(maxLevel) };
+		const accessory = await getItem('accessories', item, query);
 		if (!accessory) return channel.send('No accessory was found.');
 
 		const description = [
