@@ -57,7 +57,7 @@ async function fetchPosts(link) {
 
 function getTags(body) {
 	const tagConversion = { 'guardian':'guardian', 'seasonal':'seasonal', 'da':'da', 'dc':'dc', 'artifact':'artifact', 'rare':'rare', 'warloot':'rare', 'temp':'temporary', 'doomknight':'so', 'specialoffer':'so' };
-	const headings = body.match(/(?:<img src=.+? alt> *(?:<br>)? *)?<font.+?(?:(?:sell ?back:?)|(?:sells for:)).+?<br> +<br>/ig);
+	const headings = body.match(/(?:<img src=.+? alt> *(?:<br>)? *)?<(?:font|b).+?(?:(?:sell ?back:?)|(?:sells for:)).+?<br> +<br>/ig);
 
 	const tagList = [];
 	for (const heading of headings) {
