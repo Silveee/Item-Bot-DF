@@ -196,9 +196,11 @@ exports.commands = {
 	},
 
 	sort: async function (args, channel) {
-		let [type, sortExp] = args.split(',').map(arg => arg.trim().toLowerCase()) || [];
-		if (!type || !sortExp) return channel.send(`Usage: ${process.env.COMMAND_TOKEN}sort \`type\`, \`sorting expression\``);
+		let [type, sortExp, maxLevel] = args.split(',').map(arg => arg.trim().toLowerCase()) || [];
+		if (!type || !sortExp || (maxLevel && isNaN(maxLevel)))
+			return channel.send(`Usage: ${process.env.COMMAND_TOKEN}sort \`type\`, \`attribute to sort by\`, \`max level (optional)\``);
 
+		maxLevel = Number(maxLevel);
 		if (type === 'wep') type = 'weapon';
 		else if (type === 'acc') type = 'accessory';
 		const validTypes = new Set(['weapon', 'accessory', 'cape', 'wings', 'helm', 'belt', 'necklace', 'trinket', 'bracer']);
@@ -214,6 +216,7 @@ exports.commands = {
 		else items = await db.collection('accessories');
 
 		const filter = { newField: { $exists: true, $ne: 0 } };
+		if (!isNaN(maxLevel)) filter.level = { $lte: maxLevel };
 		if (type === 'weapon') {
 			filter.tags = { $ne: 'temporary' };
 			filter.name = { $nin: ['longsword', 'melee'] }; // Default weapons of certain classes. Ignore these
