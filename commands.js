@@ -261,31 +261,28 @@ exports.commands = {
 		];
 		const results = items.aggregate(pipeline);
 
-		let message = [];
+		let sorted = '';
 		let itemGroup = null;
-		let itemCount = 0;
 		let index = 0;
 		while ((itemGroup = (await results.next())) !== null) {
-			if (index > 0)
+			if (index > 1)
 				itemGroup.items = itemGroup.items.filter(item => !item.tags.includes('rare'));
 			if (!itemGroup.items.length) continue;
 
-			itemCount += itemGroup.items.length;
 			const items = itemGroup.items.map(item => {
 				const tags = item.tags.length ? `[${item.tags.map(capitalize).join(', ')}]` : '';
 				return `${item.title} _(lv. ${item.level})_ ${tags}`.trim();
 			});
-			message.push(`**${++index})** ${items.join(' / ')} **_(${itemGroup.newField})_**`);
-
-			if (itemCount >= 20) break;
+			const message = `**${++index})** ${items.join(' / ')} **_(${itemGroup.newField})_**\n`;
+			if (message.length + sorted.length > 2048) break;
+			sorted += message;
 		}
 
-		message = message.join('\n');
-		if (!message) channel.send('No results were found.');
+		if (!sorted) channel.send('No results were found.');
 		else channel.send({ embed:
 			{
 				title: `Sort by ${capitalize(originalExp)}`,
-				description: message,
+				description: sorted.trim(),
 			}
 		})
 			.catch(() => channel.send('An error occured'));
