@@ -159,7 +159,7 @@ exports.commands = {
 		const [item, maxLevel] = args.split('/');
 		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${process.env.COMMAND_TOKEN}accessory \`[name]\` / \`[max level (optional)]\``);
 
-		const query = { tags: { $ne: 'temporary' } };
+		const query = { tags: { $ne: ['temporary'] } };
 		if (maxLevel) query.level = { $lte: Number(maxLevel) };
 		const accessory = await getItem('accessories', item, query);
 		if (!accessory) return channel.send('No accessory was found.');
@@ -193,6 +193,102 @@ exports.commands = {
 				fields
 			}
 		});
+	},
+
+	sort: async function (args, channel) {
+		let [type, sortExp] = args.split(',').map(arg => arg.trim().toLowerCase()) || [];
+		if (!type || !sortExp) return channel.send(`Usage: ${process.env.COMMAND_TOKEN}sort \`type\`, \`sorting expression\``);
+
+		if (type === 'wep') type = 'weapon';
+		else if (type === 'acc') type = 'accessory';
+		const validTypes = new Set(['weapon', 'accessory', 'cape', 'wings', 'helm', 'belt', 'necklace', 'trinket', 'bracer']);
+		if (!validTypes.has(type)) return channel.send(`Valid types are: ${[...validTypes].join(', ')}`);
+
+		sortExp = sortExp.trim().toLowerCase();
+		if (sortExp.match(/[^0-9a-z? ]/)) return channel.send('No results were found.');
+		const originalExp = sortExp;
+
+		const db = await connect();
+		let items = null;
+		if (type === 'weapon') items = await db.collection('weapons');
+		else items = await db.collection('accessories');
+
+		const filter = { newField: { $exists: true, $ne: 0 } };
+		if (type === 'weapon') {
+			filter.tags = { $ne: 'temporary' };
+			filter.name = { $nin: ['longsword', 'melee'] }; // Default weapons of certain classes. Ignore these
+		}
+		else if (type in { 'cape':1, 'wings':1 }) filter.type = { $in: ['cape', 'wings'] };
+		// Temporary until all accessories with type 'helmet' are converted to 'helm'
+		else if (type === 'helm') filter.type = { $in: ['helm', 'helmet'] };
+		else if (type !== 'accessory') filter.type = type;
+
+		const bonuses = new Set(['block', 'dodge', 'parry', 'crit', 'magic def', 'pierce def', 'melee def', 'wis', 'end', 'cha', 'luk', 'int', 'dex', 'str', 'bonus']);
+		if (bonuses.has(sortExp)) sortExp = 'bonuses.' + sortExp;
+		else if (sortExp !== 'damage') sortExp = 'resists.' + sortExp;
+
+		const sortOrder = sortExp === 'resists.health' ? 1 : -1;
+		/* Keeps lower level items but removes items with the same name or pedia url
+		   within the same group. This block of code might be needed later. */
+		// const pipeline = [
+		// 	{ $addFields: { damage: { $avg: '$damage' }, bonuses: { $arrayToObject: '$bonuses' }, resists: { $arrayToObject: '$resists' } } },
+		// 	{ $addFields: { newField: '$' + sortExp } },
+		// 	{ $match: filter },
+
+		// 	{ $sort: { level: -1 } },
+		// 	// Remove documents that have the same name and newly added field value, keep only max level version
+		// 	{ $group: { _id: { newField: '$newField', name: '$name' }, doc: { $first: '$$CURRENT' } } },
+		// 	// Remove documents that have the same pedia url and newly added field value
+		// 	{ $group: { _id: { newField: '$doc.newField', link: '$doc.link' }, doc: { $first: '$doc' } } },
+		// 	// Place all items with the same new field value into the same group
+		// 	{ $group: { _id: '$doc.newField', newField: { $first: '$doc.newField' }, items: { $addToSet: { title: '$doc.title', level: '$doc.level', tags: '$doc.tags' } } } },
+		// 	{ $sort: { newField: sortOrder } },
+		// 	{ $limit: 10 }
+		// ];
+		const pipeline = [
+			{ $addFields: { damage: { $avg: '$damage' }, bonuses: { $arrayToObject: '$bonuses' }, resists: { $arrayToObject: '$resists' } } },
+			{ $addFields: { newField: '$' + sortExp } },
+			{ $match: filter },
+			{ $sort: { level: -1 } },
+			// Remove documents that share the same pedia URL, keep only max level version
+			{ $group: { _id: { link: '$link' }, doc: { $first: '$$CURRENT' } } },
+			// Remove documents that share the same item name
+			{ $group: { _id: { name: '$doc.name' }, doc: { $first: '$doc' } } },
+			// Group documents 
+			{ $group: { _id: '$doc.newField', newField: { $first: '$doc.newField' }, items: { $addToSet: { title: '$doc.title', level: '$doc.level', tags: '$doc.tags' } } } },
+			{ $sort: { newField: sortOrder } },
+			{ $limit: 10 }
+		];
+		const results = items.aggregate(pipeline);
+
+		let message = [];
+		let itemGroup = null;
+		let itemCount = 0;
+		let index = 0;
+		while ((itemGroup = (await results.next())) !== null) {
+			if (index > 0)
+				itemGroup.items = itemGroup.items.filter(item => !item.tags.includes('rare'));
+			if (!itemGroup.items.length) continue;
+
+			itemCount += itemGroup.items.length;
+			const items = itemGroup.items.map(item => {
+				const tags = item.tags.length ? `[${item.tags.map(capitalize).join(', ')}]` : '';
+				return `${item.title} _(lv. ${item.level})_ ${tags}`.trim();
+			});
+			message.push(`**${++index})** ${items.join(' / ')} **_(${itemGroup.newField})_**`);
+
+			if (itemCount >= 20) break;
+		}
+
+		message = message.join('\n');
+		if (!message) channel.send('No results were found.');
+		else channel.send({ embed:
+			{
+				title: `Sort by ${capitalize(originalExp)}`,
+				description: message,
+			}
+		})
+			.catch(() => channel.send('An error occured'));
 	},
 
 	// search: 'query',
