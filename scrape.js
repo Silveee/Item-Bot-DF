@@ -71,10 +71,10 @@ function getTags(body) {
 				if (tag) tags.add(tag);
 				return;
 			}
+			// Do not add the DC tag if the weapon costs or sells for 0 DC, or cannot be sold
 			const [, price] = heading.match(/price:? +(.+?) +<br> +<br>/i);
 			const [, sellback] = heading.match(/(?:(?:sell ?back:?)|(?:sells for:)) +(.+?) +<br> +<br>/i);
-			// Do not add the DC tag if the weapon costs or sells for 0 DC
-			if (tags.has('so') || sellback.match(/^0 +dragon +coins/i) || price.match(/^0 +dragon +coins/i)) return;
+			if (tags.has('so') || sellback.match(/^0 +dragon +coins/i) || price.match(/^0 +dragon +coins/i) || sellback === 'N/A') return;
 			tags.add('dc');
 		});
 		tagList.push([...tags]);
@@ -263,8 +263,8 @@ connection.then(async db => {
 	const commands = [
 		'DF Pedia scraping commands:',
 		'commands - Displays this list',
-		'addweapon [weapon url]',
-		'addaccessory [accessory url]',
+		'addwep [weapon url]',
+		'addacc [accessory url]',
 		'deleteall - Removes everything from the database',
 		'addallweapons - Adds all weapons to the database.',
 		'addallaccessories - Adds all accessories to the database.',
@@ -283,9 +283,9 @@ connection.then(async db => {
 			console.log(commands);
 			break;
 
-		case 'addweapon':
-		case 'addaccessory': {
-			const type = command === 'addaccessory' ? 'accessories' : 'weapons';
+		case 'addwep':
+		case 'addacc': {
+			const type = command === 'addacc' ? 'accessories' : 'weapons';
 			let links = input.slice(separator + 1).trim();
 			if (!links) {
 				console.log('Enter the urls.');
