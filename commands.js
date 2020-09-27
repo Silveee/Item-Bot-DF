@@ -158,9 +158,9 @@ exports.commands = {
 		});
 	},
 	acc: 'accessory',
-	accessory: async function (args, channel) {
+	accessory: async function ({ args, channel, command }) {
 		const [item, maxLevel] = args.split('/');
-		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${CT}accessory \`[name]\` / \`[max level (optional)]\``);
+		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${CT}${command} \`[name]\` / \`[max level (optional)]\``);
 
 		const query = { tags: { $ne: ['temporary'] } };
 		if (maxLevel) query.level = { $lte: Number(maxLevel) };
