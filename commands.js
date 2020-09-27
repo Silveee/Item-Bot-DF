@@ -2,6 +2,7 @@
 
 const connect = require('./db');
 
+const CT = process.env.COMMAND_TOKEN;
 const aliases = {
 	'nsod': 'necrotic sword of doom',
 	'boa': 'blade of awe',
@@ -37,6 +38,8 @@ const aliases = {
 	'sf': 'soulforged scythe',
 	'lh': 'lucky hammer',
 };
+const validTypes = new Set(['weapon', 'accessory', 'cape', 'wings', 'helm', 'belt', 'necklace', 'trinket', 'bracer']);
+const bonuses = new Set(['block', 'dodge', 'parry', 'crit', 'magic def', 'pierce def', 'melee def', 'wis', 'end', 'cha', 'luk', 'int', 'dex', 'str', 'bonus']);
 
 function capitalize(word) {
 	// Capitalizes the first letter of every other word
@@ -120,7 +123,7 @@ exports.commands = {
 	wep: 'weapon',
 	weapon: async function ({ args, channel }) {
 		const [item, maxLevel] = args.split('/');
-		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${process.env.COMMAND_TOKEN}weapon \`[name]\` / \`[max level (optional)]\``);
+		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${CT} \`[name]\` / \`[max level (optional)]\``);
 
 		const query = { tags: { $ne: 'temporary' } };
 		if (maxLevel) query.level = { $lte: Number(maxLevel) };
@@ -157,7 +160,7 @@ exports.commands = {
 	acc: 'accessory',
 	accessory: async function (args, channel) {
 		const [item, maxLevel] = args.split('/');
-		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${process.env.COMMAND_TOKEN}accessory \`[name]\` / \`[max level (optional)]\``);
+		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${CT}accessory \`[name]\` / \`[max level (optional)]\``);
 
 		const query = { tags: { $ne: ['temporary'] } };
 		if (maxLevel) query.level = { $lte: Number(maxLevel) };
@@ -195,17 +198,28 @@ exports.commands = {
 		});
 	},
 
+	sorthelp: async function({ channel }) {
+		channel.send([
+			`${CT}sort \`type\`, \`attribute to sort by\`, \`max level (optional)\``,
+			`\`type\` - Valid types are: ${[...validTypes].join(', ')}.`,
+			`\`attribute to sort by\` - Can be any bonus, resistance, or in the case of weapons, 'damage'. Anything not in this list is automatically treated as a resistance: ${[...bonuses].join(', ') + ', damage'}.`,
+			'"sortdesc" or "sortasc" can be used in place of the "sort" command to sort in descending or ascending order. "sort" sorts in descending order unless `attribute to sort by` is "health".'
+		].join('\n'));
+	},
+
 	sortdesc: 'sort',
 	sortasc: 'sort',
 	sort: async function ({ args, channel, command }) {
 		let [type, sortExp, maxLevel] = args.split(',').map(arg => arg.trim().toLowerCase()) || [];
 		if (!type || !sortExp || (maxLevel && isNaN(maxLevel)))
-			return channel.send(`Usage: ${process.env.COMMAND_TOKEN}sort \`type\`, \`attribute to sort by\`, \`max level (optional)\``);
+			return channel.send([
+				`Usage: ${CT}${command} \`type\`, \`attribute to sort by\`, \`max level (optional)\``,
+				`Use ${CT}sorthelp for more information.`
+			].join('\n'));
 
 		maxLevel = Number(maxLevel);
 		if (type === 'wep') type = 'weapon';
 		else if (type === 'acc') type = 'accessory';
-		const validTypes = new Set(['weapon', 'accessory', 'cape', 'wings', 'helm', 'belt', 'necklace', 'trinket', 'bracer']);
 		if (!validTypes.has(type)) return channel.send(`Valid types are: ${[...validTypes].join(', ')}`);
 
 		sortExp = sortExp.trim().toLowerCase();
@@ -228,7 +242,6 @@ exports.commands = {
 		else if (type === 'helm') filter.type = { $in: ['helm', 'helmet'] };
 		else if (type !== 'accessory') filter.type = type;
 
-		const bonuses = new Set(['block', 'dodge', 'parry', 'crit', 'magic def', 'pierce def', 'melee def', 'wis', 'end', 'cha', 'luk', 'int', 'dex', 'str', 'bonus']);
 		if (bonuses.has(sortExp)) sortExp = 'bonuses.' + sortExp;
 		else if (sortExp !== 'damage') sortExp = 'resists.' + sortExp;
 
