@@ -118,7 +118,7 @@ async function getItem(type, itemName, existingQuery) {
 
 exports.commands = {
 	wep: 'weapon',
-	weapon: async function (args, channel) {
+	weapon: async function ({ args, channel }) {
 		const [item, maxLevel] = args.split('/');
 		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${process.env.COMMAND_TOKEN}weapon \`[name]\` / \`[max level (optional)]\``);
 
@@ -195,7 +195,9 @@ exports.commands = {
 		});
 	},
 
-	sort: async function (args, channel) {
+	sortdesc: 'sort',
+	sortasc: 'sort',
+	sort: async function ({ args, channel, command }) {
 		let [type, sortExp, maxLevel] = args.split(',').map(arg => arg.trim().toLowerCase()) || [];
 		if (!type || !sortExp || (maxLevel && isNaN(maxLevel)))
 			return channel.send(`Usage: ${process.env.COMMAND_TOKEN}sort \`type\`, \`attribute to sort by\`, \`max level (optional)\``);
@@ -230,7 +232,11 @@ exports.commands = {
 		if (bonuses.has(sortExp)) sortExp = 'bonuses.' + sortExp;
 		else if (sortExp !== 'damage') sortExp = 'resists.' + sortExp;
 
-		const sortOrder = sortExp === 'resists.health' ? 1 : -1;
+		// commands 'sortdesc' and 'sortasc' should sort by descending and ascending order respectively
+		// 'sort' should sort in descending order unless the sorting criteria is "health"
+		let sortOrder = -1;
+		if (command === 'sortasc' || (originalExp === 'health' && command === 'sort')) sortOrder = 1;
+
 		/* Keeps lower level items but removes items with the same name or pedia url
 		   within the same group. This block of code might be needed later. */
 		// const pipeline = [
@@ -253,7 +259,7 @@ exports.commands = {
 			{ $addFields: { newField: '$' + sortExp } },
 			{ $match: filter },
 			{ $sort: { level: -1 } },
-			// Remove documents that share the same pedia URL, keep only max level version
+			// Remove documents that share the same pedia URL, only keep the max level version
 			{ $group: { _id: { link: '$link' }, doc: { $first: '$$CURRENT' } } },
 			// Remove documents that share the same item name
 			{ $group: { _id: { name: '$doc.name' }, doc: { $first: '$doc' } } },

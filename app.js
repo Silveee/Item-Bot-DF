@@ -9,11 +9,11 @@ bot.on('message', message => {
 	if (message.channel.type !== 'text' || !message.content.startsWith(process.env.COMMAND_TOKEN)) return;
 
 	let commandName = message.content.split(' ')[0].slice(1);
-	const arg = message.content.slice(commandName.length + 2).trim();
+	const args = message.content.slice(commandName.length + 2).trim();
 	if (commandName in commands) {
 		let command = commands[commandName];
 		if (typeof command === 'string') command = commands[command]; // Alias
-		command(arg, message.channel, message.member, message.mentions);
+		command({ args, command: commandName, channel: message.channel, user: message.member, mentions: message.mentions });
 	}
 });
 
