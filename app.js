@@ -6,7 +6,7 @@ const bot = require('./bot');
 const commands = require('./commands').commands;
 
 bot.on('message', message => {
-	if (message.channel.type !== 'text' || !message.content.startsWith(process.env.COMMAND_TOKEN)) return;
+	if (message.channel.type !== 'text' || !message.content.startsWith(process.env.COMMAND_TOKEN) || message.author.bot) return;
 
 	let commandName = message.content.split(' ')[0].slice(1);
 	const args = message.content.slice(commandName.length + 2).trim();
