@@ -38,7 +38,7 @@ const aliases = {
 	'sf': 'soulforged scythe',
 	'lh': 'lucky hammer',
 };
-const validTypes = new Set(['weapon', 'accessory', 'cape', 'wings', 'helm', 'belt', 'necklace', 'trinket', 'bracer']);
+const validTypes = new Set(['weapon', 'accessory', 'cape', 'wing', 'helm', 'ring', 'belt', 'necklace', 'trinket', 'bracer']);
 const bonuses = new Set(['block', 'dodge', 'parry', 'crit', 'magic def', 'pierce def', 'melee def', 'wis', 'end', 'cha', 'luk', 'int', 'dex', 'str', 'bonus']);
 
 function capitalize(word) {
@@ -216,6 +216,8 @@ exports.commands = {
 			].join('\n'));
 
 		maxLevel = Number(maxLevel);
+		if (itemType.slice(-1) === 's') itemType = itemType.slice(0, -1); // trim trailing s
+
 		if (itemType === 'wep') itemType = 'weapon';
 		else if (itemType === 'acc') itemType = 'accessory';
 		if (!validTypes.has(itemType)) return channel.send(`Valid types are: ${[...validTypes].join(', ')}`);
