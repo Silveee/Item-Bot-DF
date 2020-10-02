@@ -201,9 +201,10 @@ exports.commands = {
 	sorthelp: async function({ channel }) {
 		channel.send([
 			`${CT}sort \`type\`, \`attribute to sort by\`, \`max level (optional)\``,
-			`\`type\` - Valid types are: ${[...validTypes].join(', ')}.`,
+			`\`type\` - Valid types are: ${[...validTypes].join(', ')}. 'acc' and 'wep' are valid aliases for 'accessory' and 'weapon'.`,
 			`\`attribute to sort by\` - Can be any bonus, resistance, or in the case of weapons, 'damage'. Anything not in this list is automatically treated as a resistance: ${[...bonuses].join(', ') + ', damage'}.`,
-			'"sortdesc" or "sortasc" can be used in place of the "sort" command to sort in descending or ascending order. "sort" sorts in descending order unless `attribute to sort by` is "health".'
+			'`max level` is 90 by default. If set, causes the search to only show items <=`max level`',
+			'Sorts in descending order by default. Prepend a - sign to the `attribute to sort by` to sort in ascending order.'
 		].join('\n'));
 	},
 
@@ -212,6 +213,7 @@ exports.commands = {
 		if (!itemType || !sortExp || (maxLevel && isNaN(maxLevel)))
 			return channel.send([
 				`Usage: ${CT}sort \`type\`, \`attribute to sort by\`, \`max level (optional)\``,
+				'Use `-attribute` instead to sort in ascending order',
 				`Use ${CT}sorthelp for more information.`
 			].join('\n'));
 
