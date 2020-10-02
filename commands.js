@@ -207,48 +207,50 @@ exports.commands = {
 		].join('\n'));
 	},
 
-	sortdesc: 'sort',
-	sortasc: 'sort',
-	sort: async function ({ args, channel, command }) {
-		let [type, sortExp, maxLevel] = args.split(',').map(arg => arg.trim().toLowerCase()) || [];
-		if (!type || !sortExp || (maxLevel && isNaN(maxLevel)))
+	sort: async function ({ args, channel }) {
+		let [itemType, sortExp, maxLevel] = args.split(',').map(arg => arg.trim().toLowerCase()) || [];
+		if (!itemType || !sortExp || (maxLevel && isNaN(maxLevel)))
 			return channel.send([
-				`Usage: ${CT}${command} \`type\`, \`attribute to sort by\`, \`max level (optional)\``,
+				`Usage: ${CT}sort \`type\`, \`attribute to sort by\`, \`max level (optional)\``,
 				`Use ${CT}sorthelp for more information.`
 			].join('\n'));
 
 		maxLevel = Number(maxLevel);
-		if (type === 'wep') type = 'weapon';
-		else if (type === 'acc') type = 'accessory';
-		if (!validTypes.has(type)) return channel.send(`Valid types are: ${[...validTypes].join(', ')}`);
+		if (itemType === 'wep') itemType = 'weapon';
+		else if (itemType === 'acc') itemType = 'accessory';
+		if (!validTypes.has(itemType)) return channel.send(`Valid types are: ${[...validTypes].join(', ')}`);
 
 		sortExp = sortExp.trim().toLowerCase();
-		if (sortExp.match(/[^0-9a-z? ]/)) return channel.send('No results were found.');
-		const originalExp = sortExp;
+		if (sortExp.match(/[^\-0-9a-z? ]/)) return channel.send('No results were found.');
 
 		const db = await connect();
 		let items = null;
-		if (type === 'weapon') items = await db.collection('weapons');
+		if (itemType === 'weapon') items = await db.collection('weapons');
 		else items = await db.collection('accessories');
 
 		const filter = { newField: { $exists: true, $ne: 0 } };
 		if (!isNaN(maxLevel)) filter.level = { $lte: maxLevel };
-		if (type === 'weapon') {
+		if (itemType === 'weapon') {
 			filter.tags = { $ne: 'temporary' };
-			filter.name = { $nin: ['longsword', 'melee'] }; // Default weapons of certain classes. Ignore these
+			filter.damage = { $lte: 200 }; // Default weapons of certain classes. Ignore these
 		}
-		else if (type in { 'cape':1, 'wings':1 }) filter.type = { $in: ['cape', 'wings'] };
+		else if (itemType in { 'cape':1, 'wings':1 }) filter.type = { $in: ['cape', 'wings'] };
 		// Temporary until all accessories with type 'helmet' are converted to 'helm'
-		else if (type === 'helm') filter.type = { $in: ['helm', 'helmet'] };
-		else if (type !== 'accessory') filter.type = type;
+		else if (itemType === 'helm') filter.type = { $in: ['helm', 'helmet'] };
+		else if (itemType !== 'accessory') filter.type = itemType;
+
+		// sort in descending order by default, but sort in ascending order if the sorting
+		// expression starts with a - sign
+		let sortOrder = -1;
+		if (sortExp[0] === '-') {
+			sortExp = sortExp.slice(1);
+			sortOrder = 1;
+		}
+		// The expression before prepending anything to it
+		const originalExp = sortExp;
 
 		if (bonuses.has(sortExp)) sortExp = 'bonuses.' + sortExp;
 		else if (sortExp !== 'damage') sortExp = 'resists.' + sortExp;
-
-		// commands 'sortdesc' and 'sortasc' should sort by descending and ascending order respectively
-		// 'sort' should sort in descending order unless the sorting criteria is "health"
-		let sortOrder = -1;
-		if (command === 'sortasc' || (originalExp === 'health' && command === 'sort')) sortOrder = 1;
 
 		/* Keeps lower level items but removes items with the same name or pedia url
 		   within the same group. This block of code might be needed later. */
@@ -300,10 +302,16 @@ exports.commands = {
 			sorted += message;
 		}
 
-		if (!sorted) channel.send('No results were found.');
-		else channel.send({ embed:
+		if (!sorted) return channel.send('No results were found.');
+
+		let formattedItemType = '';
+		if (itemType === 'accessory') formattedItemType = 'accessories';
+		else formattedItemType = itemType.slice(-1) === 's' ? itemType : itemType + 's';
+		formattedItemType = capitalize(formattedItemType);
+
+		channel.send({ embed:
 			{
-				title: `Sort by ${capitalize(originalExp)}`,
+				title: `Sort ${formattedItemType} by ${capitalize(originalExp)}`,
 				description: sorted.trim(),
 			}
 		})
