@@ -199,13 +199,18 @@ exports.commands = {
 	},
 
 	sorthelp: async function({ channel }) {
-		channel.send([
-			`${CT}sort \`type\`, \`attribute to sort by\`, \`max level (optional)\``,
-			`\`type\` - Valid types are: ${[...validTypes].join(', ')}. 'acc' and 'wep' are valid aliases for 'accessory' and 'weapon'.`,
-			`\`attribute to sort by\` - Can be any bonus, resistance, or in the case of weapons, 'damage'. Anything not in this list is automatically treated as a resistance: ${[...bonuses].join(', ') + ', damage'}.`,
-			'`max level` is 90 by default. If set, causes the search to only show items <=`max level`',
-			'Sorts in descending order by default. Prepend a - sign to the `attribute to sort by` to sort in ascending order.'
-		].join('\n'));
+		channel.send({ embed:
+			{
+				title: 'Sort command help',
+				description: [
+					`${CT}sort \`type\`, \`attribute to sort by\`, \`max level (optional)\``,
+					`\`type\` - Valid types are: ${[...validTypes].join(', ')}. 'acc' and 'wep' are valid aliases for 'accessory' and 'weapon'.`,
+					`\`attribute to sort by\` - Can be any bonus, resistance, or in the case of weapons, 'damage'. Anything not in this list is automatically treated as a resistance: ${[...bonuses].join(', ') + ', damage'}.`,
+					'`max level` is 90 by default. If set, causes the search to only show items <=`max level`',
+					'Sorts in descending order by default. Prepend a - sign to the `attribute to sort by` to sort in ascending order.'
+				].join('\n')
+			}
+		});
 	},
 
 	sort: async function ({ args, channel }) {
