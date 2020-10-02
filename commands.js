@@ -252,7 +252,7 @@ exports.commands = {
 		// expression starts with a - sign
 		let sortOrder = -1;
 		if (sortExp[0] === '-') {
-			sortExp = sortExp.slice(1);
+			sortExp = sortExp.slice(1).trim();
 			sortOrder = 1;
 		}
 		// The expression before prepending anything to it
