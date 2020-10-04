@@ -241,7 +241,7 @@ exports.commands = {
 		if (!isNaN(maxLevel)) filter.level = { $lte: maxLevel };
 		if (itemType === 'weapon') {
 			filter.tags = { $ne: 'temporary' };
-			filter.damage = { $lte: 200 }; // Default weapons of certain classes. Ignore these
+			filter.damage = { $lt: 125 }; // Default weapons of certain classes. Ignore these
 		}
 		else if (itemType in { 'cape':1, 'wings':1 }) filter.type = { $in: ['cape', 'wings'] };
 		// Temporary until all accessories with type 'helmet' are converted to 'helm'
@@ -282,7 +282,7 @@ exports.commands = {
 			{ $addFields: { damage: { $avg: '$damage' }, bonuses: { $arrayToObject: '$bonuses' }, resists: { $arrayToObject: '$resists' } } },
 			{ $addFields: { newField: '$' + sortExp } },
 			{ $match: filter },
-			{ $sort: { level: -1 } },
+			{ $sort: { newField: sortOrder, level: -1 } },
 			// Remove documents that share the same pedia URL, only keep the max level version
 			{ $group: { _id: { link: '$link' }, doc: { $first: '$$CURRENT' } } },
 			// Remove documents that share the same item name
