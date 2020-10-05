@@ -198,39 +198,36 @@ exports.commands = {
 		});
 	},
 
-	sorthelp: async function({ channel }) {
-		channel.send({ embed:
-			{
-				title: 'Sort command help',
-				description: [
-					`${CT}sort \`type\`, \`attribute to sort by\`, \`max level (optional)\``,
-					`\`type\` - Valid types are: ${[...validTypes].join(', ')}. 'acc' and 'wep' are valid aliases for 'accessory' and 'weapon'.`,
-					`\`attribute to sort by\` - Can be any bonus, resistance, or in the case of weapons, 'damage'. Anything not in this list is automatically treated as a resistance: ${[...bonuses].join(', ') + ', damage'}.`,
-					'`max level` is 90 by default. If set, causes the search to only show items <=`max level`',
-					'Sorts in descending order by default. Prepend a - sign to the `attribute to sort by` to sort in ascending order.'
-				].join('\n')
-			}
-		});
-	},
-
 	sort: async function ({ args, channel }) {
-		let [itemType, sortExp, maxLevel] = args.split(',').map(arg => arg.trim().toLowerCase()) || [];
-		if (!itemType || !sortExp || (maxLevel && isNaN(maxLevel)))
-			return channel.send([
-				`Usage: ${CT}sort \`type\`, \`attribute to sort by\`, \`max level (optional)\``,
-				'Use `-attribute` instead to sort in ascending order',
-				`Use ${CT}sorthelp for more information.`
-			].join('\n'));
+		const embed = (text, title) => { 
+			const body = {};
+			body.description = text;
+			if (title) body.title = title;
+			return { embed: body };
+		};
 
+		let [itemType, sortExp, maxLevel] = args.split(',').map(arg => arg.trim().toLowerCase()) || [];
+		if (!itemType || !sortExp)
+			return channel.send(embed([
+				`Usage: ${CT}sort \`item type\`, \`attribute to sort by\`, \`max level (optional)\``,
+				`\`item type\` - Valid types are: _${[...validTypes].join(', ')}_. Abbreviations such as 'acc' and 'wep' also work.`,
+				'`attribute to sort by` can be any stat bonus or resistance _(eg. STR, Melee Def, Bonus, All, Ice, Health etc.)_, or in the case of weapons, _damage_. Add a - sign at the beginning of the `attribute` to sort in ascending order.',
+			].join('\n')));
+		if (maxLevel && maxLevel.match(/[^\-0-9]/))
+			return channel.send(`"${maxLevel}" is not a valid number.`);
 		maxLevel = Number(maxLevel);
+		if (maxLevel < 0 || maxLevel > 90)
+			return channel.send(embed(`The max level should be between 0 and 90 inclusive. ${maxLevel} is not valid.`));
 		if (itemType.slice(-1) === 's') itemType = itemType.slice(0, -1); // trim trailing s
 
 		if (itemType === 'wep') itemType = 'weapon';
-		else if (itemType === 'acc') itemType = 'accessory';
-		if (!validTypes.has(itemType)) return channel.send(`Valid types are: ${[...validTypes].join(', ')}`);
+		else if (itemType === 'acc' || itemType === 'accessorie') itemType = 'accessory'; // "accessorie" because the trailing s would have been removed
+		else if (itemType === 'helmet') itemType = 'helm';
+		if (!validTypes.has(itemType)) return channel.send(embed(`"${itemType}" is not a valid item type. Valid types are: _${[...validTypes].join(', ')}_. "acc" and "wep" are valid abbreviations for accessories and weapons.`));
 
 		sortExp = sortExp.trim().toLowerCase();
-		if (sortExp.match(/[^\-0-9a-z? ]/)) return channel.send('No results were found.');
+		// Ignore search query if it contains an invalid character
+		if (sortExp.match(/[^\-0-9a-z? ]/)) return channel.send(embed('No results were found.'));
 
 		const db = await connect();
 		let items = null;
@@ -311,19 +308,14 @@ exports.commands = {
 			sorted += message;
 		}
 
-		if (!sorted) return channel.send('No results were found.');
+		if (!sorted) return channel.send(embed('No results were found.'));
 
 		let formattedItemType = '';
 		if (itemType === 'accessory') formattedItemType = 'accessories';
 		else formattedItemType = itemType.slice(-1) === 's' ? itemType : itemType + 's';
 		formattedItemType = capitalize(formattedItemType);
 
-		channel.send({ embed:
-			{
-				title: `Sort ${formattedItemType} by ${capitalize(originalExp)}`,
-				description: sorted.trim(),
-			}
-		})
+		channel.send(embed(sorted.trim(), `Sort ${formattedItemType} by ${capitalize(originalExp)}`))
 			.catch(() => channel.send('An error occured'));
 	},
 
