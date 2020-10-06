@@ -75,7 +75,10 @@ function getTags(body) {
 			// Do not add the DC tag if the weapon costs or sells for 0 DC, or cannot be sold
 			const [, price] = heading.match(/price:? +(.+?) +<br> +<br>/i);
 			const [, sellback] = heading.match(/(?:(?:sell ?back:?)|(?:sells for:)) +(.+?) +<br> +<br>/i);
-			if (tags.has('so') || sellback.match(/^0 +dragon +coins/i) || price.match(/^0 +dragon +coins/i) || sellback === 'N/A') return;
+			if (tags.has('so') || sellback.match(/^0 +dragon +coins/i) || price.match(/^0 +dragon +coins/i) || sellback === 'N/A') {
+				tags.add('free storage');
+				return;
+			}
 			tags.add('dc');
 		});
 		tagList.push([...tags]);
