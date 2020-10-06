@@ -35,6 +35,7 @@ function fetchContent(url) {
 		req.on('error', () => fetchContent(url).then(resolve).catch(reject));
 	});
 }
+
 async function fetchLinks(url, pageIndex) {
 	// Fetches all links from the DF pedia page
 	const page = await fetchContent(`${url}&p=${pageIndex}`);
@@ -111,6 +112,12 @@ function getItemType(body) {
 	return itemType;
 }
 
+function getCategory(itemType) {
+	const accessoryList = new Set(['cape', 'helm', 'helmet', 'wings', 'belt', 'necklace', 'ring', 'bracer', 'trinket']);
+	if (accessoryList.has(itemType)) return 'accessory';
+	return 'weapon';
+}
+
 function getBoosts(body) {
 	const possibleBonuses = {'block':'Block', 'dodge':'Dodge', 'parry':'Parry', 'crit':'Crit', 'magic def':'Magic Def', 'pierce def':'Pierce Def', 'melee def':'Melee Def', 'wis':'WIS', 'end':'END', 'cha':'CHA', 'luk':'LUK', 'int':'INT', 'dex':'DEX', 'str':'STR', 'bonus':'Bonus'};
 	const bonuses = [];
@@ -137,109 +144,105 @@ function getBoosts(body) {
 	return { bonuses, resists };
 }
 
-function getWeaponData(post, link) {
-	// Parses a weapon's information from a post and returns an object
-	let title = post.find('font[size=3]').first().text();
-	title = decode(title);
-	if (!title) return []; // Not a weapon
-
-	const body = post.html();
-	const [, level] = body.match(/<br> +Level:? +(\d{1,2}) +<br>/) || [];
-	if (!level) return []; // Not a weapon
-
-	const tagLists = getTags(body);
-	const [, damageRange] = body.match(/<br> +Damage:? +(.+?) +<br>/);
-	const damage = damageRange.split('-').filter(num => !isNaN(num)).map(Number);
-	const [, elementList] = body.match(/<br> +Element:? +(.+?) +<br>/);
-	const elements = [];
-	for (const element of elementList.trim().split('/').map(e => e.toLowerCase().trim()))
-		elements.push(element);
-	const itemType = getItemType(body);
-	const { bonuses, resists } = getBoosts(body);
-	const specials = [];
-	const specialsList = body.match(/Special Activation:.+?Special Rate: .+? +<br>/gi);
-	for (const special of specialsList || []) {
-		const specialData = {};
-		let [, activation] = special.match(/special activation: +(.+?) +<br>/i);
-		if (activation.match(/attack/i)) specialData.activation = 'attack button';
-		else if (activation.match(/(?:hit)|(?:crit)/i)) specialData.activation = 'on-hit';
-		else if (activation.match(/click/i)) specialData.activation = 'click weapon';
-		else if (activation.match(/enemies/i)) specialData.activation = 'specific enemy';
-
-		const [, effectText] = special.match(/special (?:(?:effect)|(?:damage)): +(.+?) +<br>/i);
-		const effect = cheerio.load(effectText)('body');
-		effect.find('s').remove();
-		specialData.effect = decode(effect.text().replace(/ +/g, ' '));
-		if (specialData.activation === 'specific enemy') specialData.effect += ` (${activation})`;
-
-		specialData.elements = [];
-		if (!(specialData.activation in { 'click weapon':1, 'specific enemy':1 })) {
-			const [, elementMatch] = special.match(/special element: +(.+?) +<br>/i) || [];
-			if (elementMatch && elementMatch !== 'N/A')
-				specialData.elements = elementMatch.split('/').map(element => element.trim().toLowerCase());
-		}
-
-		const [, rate] = special.match(/special rate: +(.+?)%/i) || [];
-		specialData.rate = (Number(rate) || parseInt(rate) || 100) / 100;
-
-		specials.push(specialData);
-	}
-	return tagLists.map(tags => {
-		const weapon = { link, title, tags, name: sanitizeName(title), level: Number(level), damage, elements, type: itemType.split(', '), bonuses, resists, specials };
-		return weapon;
-	});
-}
-
-async function getAccessoryData(post, link) {
+async function getEquippableItemData(post, link) {
 	/**
-	* Parses an accessory's information from a post and returns an object containing accessory data.
+	* Parses an accessory or weapon's information from a post and returns an object containing data.
 	* This object is then to be stored as document in its respective collection.
 	* @param {Object} post - Cheerio object containing the forum post's html data
 	* @param {String} link - URL of the forum post
 	* @returns {Object} - Object containing accessory information to be stored in the mongoDB database.
 	*/
-	let title = post.find('font').first().text();
+	let title = post.find('font[size=3]').first().text();
 	title = decode(title);
 	if (!title) return [];
 
 	const body = post.html();
-	let [, level] = body.match(/<br> +Level:? +(\d{1,2}) +<br>/) || [];
+	const [, level] = body.match(/<br> +Level:? +(\d{1,2}) +<br>/) || [];
 	if (!level) return [];
 
 	const tagLists = getTags(body);
-	const itemType = getItemType(body);
 	const { bonuses, resists } = getBoosts(body);
-	let modifies = null;
-	const [, modifications] = body.match(/<br> +Modifies:(.+?)<br>/) || [];
-	if (modifications) {
-		modifies = cheerio.load(modifications)
-			.text().split(',')
-			.map(armor => armor.replace(/(?:armor)|(?:leathers)|(?:robes)/ig, '').trim())
-			.join(', ');
-	}
-	let skill = null;
-	if (itemType === 'trinket') {
-		const [, ability] = body.match(/<br> +Ability:? +(.+?) +<br>/i) || [];
-		if (ability) {
-			const [, link, postNumber] = ability.match(/href="(.+?)">(?:.+?\((\d+?)\)<)?/);
-			skill = await getTrinketSkill(link, (Number(postNumber) || 1) - 1);
+	const itemType = getItemType(body);
+	const category = getCategory(itemType);
+	if (category === 'weapon') {
+		const [, damageRange] = body.match(/<br> +Damage:? +(.+?) +<br>/);
+		const damage = damageRange.split('-').filter(num => !isNaN(num)).map(Number);
+		const [, elementList] = body.match(/<br> +Element:? +(.+?) +<br>/);
+		const elements = [];
+		for (const element of elementList.trim().split('/').map(e => e.toLowerCase().trim()))
+			elements.push(element);
+		const specials = [];
+		const specialsList = body.match(/Special Activation:.+?Special Rate: .+? +<br>/gi);
+		for (const special of specialsList || []) {
+			const specialData = {};
+			let [, activation] = special.match(/special activation: +(.+?) +<br>/i);
+			if (activation.match(/attack/i)) specialData.activation = 'attack button';
+			else if (activation.match(/(?:hit)|(?:crit)/i)) specialData.activation = 'on-hit';
+			else if (activation.match(/click/i)) specialData.activation = 'click weapon';
+			else if (activation.match(/enemies/i)) specialData.activation = 'specific enemy';
+	
+			const [, effectText] = special.match(/special (?:(?:effect)|(?:damage)): +(.+?) +<br>/i);
+			const effect = cheerio.load(effectText)('body');
+			effect.find('s').remove();
+			specialData.effect = decode(effect.text().replace(/ +/g, ' '));
+			if (specialData.activation === 'specific enemy') specialData.effect += ` (${activation})`;
+	
+			specialData.elements = [];
+			if (!(specialData.activation in { 'click weapon':1, 'specific enemy':1 })) {
+				const [, elementMatch] = special.match(/special element: +(.+?) +<br>/i) || [];
+				if (elementMatch && elementMatch !== 'N/A')
+					specialData.elements = elementMatch.split('/').map(element => element.trim().toLowerCase());
+			}
+	
+			const [, rate] = special.match(/special rate: +(.+?)%/i) || [];
+			specialData.rate = (Number(rate) || parseInt(rate) || 100) / 100;
+	
+			specials.push(specialData);
 		}
-	}
+		return tagLists.map(tags => {
+			const weapon = {
+				category, link, title, tags, name: sanitizeName(title),
+				level: Number(level), damage, elements, type: itemType.split(', '),
+				bonuses, resists, specials
+			};
+			return weapon;
+		});
+	} else {
+		let modifies = null;
+		const [, modifications] = body.match(/<br> +Modifies:(.+?)<br>/) || [];
+		if (modifications) {
+			modifies = cheerio.load(modifications)
+				.text().split(',')
+				.map(armor => armor.replace(/(?:armor)|(?:leathers)|(?:robes)/ig, '').trim())
+				.join(', ');
+		}
+		let skill = null;
+		if (itemType === 'trinket') {
+			const [, ability] = body.match(/<br> +Ability:? +(.+?) +<br>/i) || [];
+			if (ability) {
+				const [, link, postNumber] = ability.match(/href="(.+?)">(?:.+?\((\d+?)\)<)?/);
+				skill = await getTrinketSkill(link, (Number(postNumber) || 1) - 1);
+			}
+		}
 
-	return tagLists.map(tags => {
-		const accessory = { link, title, tags, name: sanitizeName(title), level: Number(level), type: itemType, bonuses, resists, skill, modifies };
-		return accessory;
-	});
+		return tagLists.map(tags => {
+			const accessory = {
+				category, link, title, tags, name: sanitizeName(title),
+				level: Number(level), type: itemType, bonuses,
+				resists, skill, modifies
+			};
+			return accessory;
+		});
+	}
 }
 
-async function fetchItemPage(link, category, collection) {
+async function fetchItemPage(link, collection) {
 	// Fetches all accessories from a page and adds them to a mongoDB collection if specified
-	const getData = { 'weapons': getWeaponData, 'accessories': getAccessoryData };
 	const posts = await fetchPosts(link);
 	if (collection) await collection.deleteMany({ link });
 	await applyAsync(posts.toArray(), async post => {
 		try {
-			const items = await getData[category](post, link);
+			const items = await getEquippableItemData(post, link);
 			if (!items.length) return;
 			if (collection)
 				await collection.insertMany(items);
@@ -255,16 +258,14 @@ console.log('Connecting to database...');
 connection.then(async db => {
 	console.log('Database connection successful');
 
-	const weapons = await db.collection('weapons');
-	const accessories = await db.collection('accessories');
+	const itemCollection = await db.collection('items');
 
 	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
 	const commands = [
 		'DF Pedia scraping commands:',
 		'commands - Displays this list',
-		'addwep [weapon url]',
-		'addacc [accessory url]',
+		'add [url]',
 		'deleteall - Removes everything from the database',
 		'addallweapons - Adds all weapons to the database.',
 		'addallaccessories - Adds all accessories to the database.',
@@ -283,18 +284,16 @@ connection.then(async db => {
 			console.log(commands);
 			break;
 
-		case 'addwep':
-		case 'addacc': {
-			const type = command === 'addacc' ? 'accessories' : 'weapons';
+		case 'add': {
 			let links = input.slice(separator + 1).trim();
 			if (!links) {
 				console.log('Enter the urls.');
 				continue;
 			}
 			links = links.split(',').map(link => link.trim());
-			console.log(`Adding ${type} to the database...`);
-			await applyAsync(links, fetchItemPage, type, type[0] === 'a' ? accessories : weapons);
-			console.log(`${type[0].toUpperCase() + type.slice(1)} added successfully.\n`);
+			console.log('Adding items to the database...');
+			await applyAsync(links, fetchItemPage, itemCollection);
+			console.log('Items added successfully.\n');
 			break;
 		}
 
@@ -306,7 +305,7 @@ connection.then(async db => {
 				if (!anchors.length) break;
 				anchors.each(async (_, a) => {
 					const link = 'https://forums2.battleon.com/f/' + a.attribs.href;
-					fetchItemPage(link, 'weapons', weapons);
+					fetchItemPage(link, itemCollection);
 				});
 			}
 			// conditional break: fall through only if command is 'addall'
@@ -321,7 +320,7 @@ connection.then(async db => {
 				if (!anchors.length) break;
 				anchors.each(async (_, a) => {
 					const link = 'https://forums2.battleon.com/f/' + a.attribs.href;
-					fetchItemPage(link, 'accessories', accessories);
+					fetchItemPage(link, itemCollection);
 				});
 			}
 			break;
@@ -329,7 +328,7 @@ connection.then(async db => {
 
 		case 'deleteall':
 			console.log('Deleting all items..');
-			await Promise.all([accessories.deleteMany({}), weapons.deleteMany({})]);
+			await itemCollection.deleteMany();
 			console.log('All items have been removed from the database.');
 			break;
 
