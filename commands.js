@@ -214,7 +214,7 @@ exports.commands = {
 				'`attribute to sort by` can be any stat bonus or resistance _(eg. STR, Melee Def, Bonus, All, Ice, Health etc.)_, or in the case of weapons, _damage_. Add a - sign at the beginning of the `attribute` to sort in ascending order.',
 			].join('\n')));
 		if (maxLevel && maxLevel.match(/[^\-0-9]/))
-			return channel.send(`"${maxLevel}" is not a valid number.`);
+			return channel.send(embed(`"${maxLevel}" is not a valid number.`));
 		maxLevel = Number(maxLevel);
 		if (maxLevel < 0 || maxLevel > 90)
 			return channel.send(embed(`The max level should be between 0 and 90 inclusive. ${maxLevel} is not valid.`));
