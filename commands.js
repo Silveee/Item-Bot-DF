@@ -220,12 +220,14 @@ exports.commands = {
 		maxLevel = Number(maxLevel);
 		if (maxLevel < 0 || maxLevel > 90)
 			return channel.send(embed(`The max level should be between 0 and 90 inclusive. ${maxLevel} is not valid.`));
+		
+		const originalItemType = itemType;
 		if (itemType.slice(-1) === 's') itemType = itemType.slice(0, -1); // trim trailing s
 
 		if (itemType === 'wep') itemType = 'weapon';
 		else if (itemType === 'acc' || itemType === 'accessorie') itemType = 'accessory'; // "accessorie" because the trailing s would have been removed
 		else if (itemType === 'helmet') itemType = 'helm';
-		if (!validTypes.has(itemType)) return channel.send(embed(`"${itemType}" is not a valid item type. Valid types are: _${[...validTypes].join(', ')}_. "acc" and "wep" are valid abbreviations for accessories and weapons.`));
+		if (!validTypes.has(itemType)) return channel.send(embed(`"${originalItemType}" is not a valid item type. Valid types are: _${[...validTypes].join(', ')}_. "acc" and "wep" are valid abbreviations for accessories and weapons.`));
 
 		sortExp = sortExp.trim().toLowerCase();
 		// Ignore search query if it contains an invalid character
