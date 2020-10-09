@@ -47,7 +47,10 @@ function capitalize(word) {
 	// Except these, though; They're fully capitalized
 	if (word in { 'str':1, 'int':1, 'dex':1, 'luk':1, 'cha':1, 'wis':1, 'end':1, 'dm':1, 'so':1, 'dc':1, 'da':1 }) return word.toUpperCase();
 	if (!word || !word.trim()) return word;
-	return word.trim().split(' ').map(word => word[0].toUpperCase() + word.slice(1)).join(' ');
+	return word.trim().split(' ').map(word => {
+		if (!word) return word;
+		return word[0].toUpperCase() + word.slice(1);
+	}).join(' ');
 }
 function sanitizeName(name) {
 	// Lowercases names, removes leading and trailing whitespace, and removes unnecessary characters
