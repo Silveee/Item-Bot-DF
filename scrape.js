@@ -117,9 +117,9 @@ function getBoosts(body) {
 	const resists = [];
 	const [, bonusList] = body.match(/Bonuses:? +(.+?) <br>/);
 	if (bonusList !== 'None') {
-		for (const bonus of bonusList.split(', ')) {
+		for (const bonus of bonusList.split(',').map(bonus => bonus.trim().toLowerCase())) {
 			const plusOrMinus = bonus.indexOf('+') > -1 ? bonus.indexOf('+') : bonus.indexOf('-');
-			const name = bonus.slice(0, plusOrMinus).toLowerCase().trim().replace(/[^a-z? ]/g, '');
+			const name = bonus.slice(0, plusOrMinus).trim().replace(/[^a-z? ]/g, '');
 			const value = Number(bonus.slice(plusOrMinus).replace(/ /g, ''));
 			if (name in possibleBonuses) bonuses.push({ k: name, v: value });
 			else resists.push({ k: name, v: value });
@@ -127,9 +127,9 @@ function getBoosts(body) {
 	}
 	const [, resistList] = body.match(/Resists:? +(.+?) <br>/) || [];
 	if (resistList && resistList !== 'None') {
-		for (const resist of resistList.split(', ')) {
+		for (const resist of resistList.split(',').map(res => res.trim().toLowerCase())) {
 			const plusOrMinus = resist.indexOf('+') > -1 ? resist.indexOf('+') : resist.indexOf('-');
-			const name = resist.slice(0, plusOrMinus).toLowerCase().trim().replace(/[^a-z? ]/g, '');
+			const name = resist.slice(0, plusOrMinus).trim().replace(/[^a-z? ]/g, '');
 			const value = Number(resist.slice(plusOrMinus).replace(/ /g, ''));
 			resists.push({ k: name, v: value });
 		}
