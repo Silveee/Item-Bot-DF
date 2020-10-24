@@ -115,7 +115,7 @@ function getBoosts(body) {
 	const possibleBonuses = {'block':'Block', 'dodge':'Dodge', 'parry':'Parry', 'crit':'Crit', 'magic def':'Magic Def', 'pierce def':'Pierce Def', 'melee def':'Melee Def', 'wis':'WIS', 'end':'END', 'cha':'CHA', 'luk':'LUK', 'int':'INT', 'dex':'DEX', 'str':'STR', 'bonus':'Bonus'};
 	const bonuses = [];
 	const resists = [];
-	const [, bonusList] = body.match(/Bonuses:? +(.+?) <br>/);
+	const [, bonusList] = body.match(/Bonuses:? +(.+?) +<br>/);
 	if (bonusList !== 'None') {
 		for (const bonus of bonusList.split(',').map(bonus => bonus.trim().toLowerCase())) {
 			const plusOrMinus = bonus.indexOf('+') > -1 ? bonus.indexOf('+') : bonus.indexOf('-');
@@ -125,7 +125,7 @@ function getBoosts(body) {
 			else resists.push({ k: name, v: value });
 		}
 	}
-	const [, resistList] = body.match(/Resists:? +(.+?) <br>/) || [];
+	const [, resistList] = body.match(/Resists:? +(.+?) +<br>/) || [];
 	if (resistList && resistList !== 'None') {
 		for (const resist of resistList.split(',').map(res => res.trim().toLowerCase())) {
 			const plusOrMinus = resist.indexOf('+') > -1 ? resist.indexOf('+') : resist.indexOf('-');
