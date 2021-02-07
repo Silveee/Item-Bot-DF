@@ -52,13 +52,18 @@ async function fetchPosts(link) {
 	// Fetches all posts within an item's page
 	const page = await fetchContent(link);
 	const $ = cheerio.load(page);
+	$('td.msg s, td.msg strike').remove();
+	$('td.msg i, td.msg strong, td.msg b').each((_, elem) => $(elem).replaceWith($(elem).html().trim()));
+	// italics.each(function() {
+	// 	$(this).replaceWith('_' + $(this).html() + '_');
+	// });
 	const posts = $('td.msg');
 	return posts.map((_, post) => $(post));
 }
 
 function getTags(body) {
-	const tagConversion = { 'guardian':'guardian', 'seasonal':'seasonal', 'da':'da', 'dc':'dc', 'artifact':'artifact', 'rare':'rare', 'warloot':'rare', 'temp':'temporary', 'doomknight':'so', 'specialoffer':'so' };
-	const headings = body.match(/(?:<img src=.+? alt> *(?:<br>)? *)?<(?:font|b).+?(?:(?:sell ?back:?)|(?:sells for:)).+?<br> +<br>/ig);
+	const tagConversion = { 'guardian':'guardian', 'seasonal':'se', 'da':'da', 'dc':'dc', 'artifact':'artifact', 'rare':'rare', 'warloot':'rare', 'temp':'temporary', 'doomknight':'so', 'specialoffer':'so' };
+	const headings = body.match(/(?:<img src=.+? alt> *(?:<br>)? *)?<font.+?(?:(?:sell ?back:?)|(?:sells for:)).+?<br> +<br>/ig);
 
 	const tagList = [];
 	for (const heading of headings) {
@@ -96,13 +101,18 @@ async function getTrinketSkill(link, postNumber) {
 	* @returns {Object} - Object containing .
 	*/
 	const posts = await fetchPosts(link);
-	const body = posts[postNumber].html();
+	const $ = cheerio.load(posts[postNumber].html());
+	const li = $('ul li'), ul = $('ul');
+	li.each((_, elem) => $(elem).replaceWith(' ' + $(elem).text().trim()));
+	ul.replaceWith(ul.text() + ' <br>');
+	const body = $.html();
 	const [, effect] = body.match(/Effect:? +(.+?) <br>/);
 	const [, cooldown] = body.match(/Cooldown:? +(\d+)/);
 	const [, damageType] = body.match(/(?:Damage|Attack) Type:? +(.+?) <br>/);
-	const [, manaCost] = body.match(/Mana Cost:? +(\d+)/);
+	let [, manaCost] = body.match(/Mana Cost:? +(.+) <br>/);
+	manaCost = Number(manaCost) || 0;
 	const [, element] = body.match(/Element:? +(.+?) <br>/);
-	return { effect: decode(effect), cooldown: Number(cooldown), damageType: damageType.toLowerCase(), manaCost: Number(manaCost), element: element.toLowerCase() };
+	return { effect: decode(effect), cooldown: Number(cooldown), damageType: damageType.toLowerCase(), manaCost, element: element.toLowerCase() };
 }
 
 function getItemType(body) {
