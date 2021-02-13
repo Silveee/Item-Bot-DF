@@ -23,11 +23,26 @@
         ],
         "quotes": [
             "error",
-            "single"
+            "single",
+            {
+                "avoidEscape": true
+            }
+        ],
+        "no-unneeded-ternary": [
+            "error",
+            {
+                "defaultAssignment": false
+            }
+        ],
+        "no-nested-ternary": [
+            "error"
         ],
         "semi": [
             "error",
             "always"
+        ],
+        "max-len": [
+            "error"
         ]
     }
 }
