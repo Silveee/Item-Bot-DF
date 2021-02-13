@@ -51,7 +51,14 @@ function capitalize(word) {
 }
 function sanitizeName(name) {
 	// Lowercases names, removes leading and trailing whitespace, and removes unnecessary characters
-	return name.toLowerCase().replace(/[.,\-"()]/g, ' ').replace(/’/g, '\'').replace(/ +/g, ' ').trim();
+	return name.toLowerCase()
+		// Replace accented characters with their non-accented versions
+		.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+		.replace(/[()'"“”‘’`]/g, '') // Remove brackets, quotes, and backticks
+		// Replace all other non-alphanumeric character (other than |)
+		// sequences with a single whitespace
+		.replace(/[^a-z0-9|]+/g, ' ')
+		.trim();
 }
 function formatBoosts(boosts) {
 	// Displays resistances and bonuses the correct way
@@ -63,14 +70,14 @@ function formatBoosts(boosts) {
 	return boosts.map(formatData).join(', ') || 'None';
 }
 
-async function getItem(type, itemName, existingQuery) {
+async function getItem(itemName, existingQuery) {
 	itemName = sanitizeName(itemName);
 	if (itemName in aliases) itemName = aliases[itemName];
 	const query = existingQuery;
 	query.name = itemName;
 
 	const db = await connect();
-	const items = await db.collection(type);
+	const items = await db.collection('items');
 
 	let results = items.find(query).sort({ level: -1 }).limit(1);
 	let item = await results.next();
@@ -127,17 +134,19 @@ exports.commands = {
 
 		const query = { tags: { $ne: 'temporary' } };
 		if (maxLevel) query.level = { $lte: Number(maxLevel) };
-		const weapon = await getItem('weapons', item, query);
+		const weapon = await getItem(item, query);
 		if (!weapon) return channel.send('No weapon was found');
 
+		// Cosmetic items don't have any stats and don't do any damage
+		const isCosmetic = weapon.tags.includes('cosmetic');
 		const description = [
-			`**Tags:** ${weapon.tags.map(capitalize).join(', ') || 'None'}`,
+			`**Tags:** ${weapon.tags.map(tag => tag === 'se' ? 'Seasonal': capitalize(tag)).join(', ') || 'None'}`,
 			`**Level:** ${weapon.level}`,
 			`**Type:** ${weapon.type.map(capitalize).join(' / ')}`,
-			`**Damage:** ${weapon.damage.map(String).join('-') || 'Scaled'}`,
+			...isCosmetic ? [] : [`**Damage:** ${weapon.damage.map(String).join('-') || 'Scaled'}`],
 			`**Element:** ${weapon.elements.map(capitalize).join(' / ')}`,
-			`**Bonuses:** ${formatBoosts(weapon.bonuses)}`,
-			`**Resists:** ${formatBoosts(weapon.resists)}`,
+			...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(weapon.bonuses)}`],
+			...isCosmetic ? [] : [`**Resists:** ${formatBoosts(weapon.resists)}`],
 			weapon.link,
 		];
 		const specialFields = [];
@@ -153,26 +162,29 @@ exports.commands = {
 			{
 				title: weapon.title,
 				description: description.join('\n'),
-				fields: specialFields
+				fields: specialFields,
+				image: { url: weapon.images ? weapon.images[0] : null }
 			}
 		});
 	},
 	acc: 'accessory',
 	accessory: async function ({ args, channel, command }) {
 		const [item, maxLevel] = args.split('/');
-		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${CT}${command} \`[name]\` / \`[max level (optional)]\``);
+		if (!item.trim() || (maxLevel && isNaN(maxLevel)))
+			return channel.send(`Usage: ${CT}${command} \`[name]\` / \`[max level (optional)]\``);
 
 		const query = { tags: { $ne: ['temporary'] } };
 		if (maxLevel) query.level = { $lte: Number(maxLevel) };
-		const accessory = await getItem('accessories', item, query);
+		const accessory = await getItem(item, query);
 		if (!accessory) return channel.send('No accessory was found.');
 
+		const isCosmetic = accessory.tags.includes('cosmetic');
 		const description = [
-			`**Tags:** ${accessory.tags.map(capitalize).join(', ') || 'None'}`,
+			`**Tags:** ${accessory.tags.map(tag => tag === 'se' ? 'Seasonal': capitalize(tag)).join(', ') || 'None'}`,
 			`**Level:** ${accessory.level}`,
 			`**Type:** ${capitalize(accessory.type)}`,
-			`**Bonuses:** ${formatBoosts(accessory.bonuses)}`,
-			`**Resists:** ${formatBoosts(accessory.resists)}`,
+			...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(accessory.bonuses)}`],
+			...isCosmetic ? [] : [`**Resists:** ${formatBoosts(accessory.resists)}`]
 		];
 		if (accessory.modifies) description.push(`**Modifies:**: ${accessory.modifies}`);
 
