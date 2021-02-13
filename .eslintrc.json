@@ -42,7 +42,10 @@
             "always"
         ],
         "max-len": [
-            "error"
+            "error",
+            {
+                "code": 120
+            }
         ]
     }
 }
