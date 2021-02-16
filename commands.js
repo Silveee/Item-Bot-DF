@@ -170,7 +170,7 @@ exports.commands = {
 
 		const query = { tags: { $ne: 'temporary' } };
 		if (maxLevel) query.level = { $lte: Number(maxLevel) };
-		const item = await getItem(item, query);
+		const item = await getItem(itemName, query);
 		if (!item) return channel.send('No weapon was found');
 
 		// Cosmetic items don't have any stats and don't do any damage
@@ -361,7 +361,7 @@ exports.commands = {
 			// Remove documents that share the same item name
 			{ $group: { _id: { name: '$doc.name' }, doc: { $first: '$doc' } } },
 			// Group documents 
-			{ 
+			{
 				$group: {
 					_id: '$doc.newField', newField: { $first: '$doc.newField' }, 
 					items: { $addToSet: { title: '$doc.title', level: '$doc.level', tags: '$doc.tags' } }
