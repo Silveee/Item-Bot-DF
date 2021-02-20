@@ -5,7 +5,7 @@ require('dotenv').config();
 const bot = require('./bot');
 const commands = require('./commands').commands;
 
-bot.on('message', message => {
+bot.on('message', async message => {
 	if (
 		message.channel.type !== 'text' ||
 		!message.content.startsWith(process.env.COMMAND_TOKEN) ||
@@ -18,7 +18,7 @@ bot.on('message', message => {
 		let command = commands[commandName];
 		if (typeof command === 'string') command = commands[command]; // Alias
 		try {
-			command(message, args, commandName);
+			await command(message, args, commandName);
 		} catch (err) {
 			console.error('An error occurred:\n' + err.stack);
 			message.channel.send('An error occurred.' + (process.env.DEV_ID ? ` <@${process.env.DEV_ID}>` : ''));
