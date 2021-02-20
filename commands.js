@@ -74,6 +74,24 @@ function capitalize(text) {
 }
 
 /**
+ * Format an input tag
+ *
+ * @param {String} tag
+ *   Tag to be formatted
+ *
+ * @return {String}
+ *   'Seasonal', 'ArchKnight Saga', 'Alexander Saga' if the input tag is 'se', 'ak', or 'alexander'
+ *   respectively. The return value is capitalize(tag) otherwise
+ */
+function formatTag(tag) {
+	return {
+		'se': 'Seasonal',
+		'ak': 'ArchKnight Saga',
+		'alexander': 'Alexander Saga'
+	}[tag] || capitalize(tag);
+}
+
+/**
  * Does the following:
  * - Lowercases input text
  * - Removes leading and trailing whitespace
@@ -204,9 +222,7 @@ exports.commands = {
 		const isCosmetic = item.tags && item.tags.includes('cosmetic');
 		if (item.category === 'weapon') {
 			description = [
-				`**Tags:** ${(item.tags || [])
-					.map(tag => tag === 'se' ? 'Seasonal': capitalize(tag))
-					.join(', ') || 'None'}`,
+				`**Tags:** ${(item.tags || []).map(formatTag).join(', ') || 'None'}`,
 				`**Level:** ${item.level}`,
 				`**Type:** ${item.type.map(capitalize).join(' / ')}`,
 				...isCosmetic ? [] : [`**Damage:** ${item.damage.map(String).join('-') || 'Scaled'}`],
@@ -229,7 +245,7 @@ exports.commands = {
 			}
 		} else if (item.category === 'accessory') {
 			description = [
-				`**Tags:** ${item.tags.map(tag => tag === 'se' ? 'Seasonal': capitalize(tag)).join(', ') || 'None'}`,
+				`**Tags:** ${(item.tags || []).map(formatTag).join(', ') || 'None'}`,
 				`**Level:** ${item.level}`,
 				`**Type:** ${capitalize(item.type)}`,
 				...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
