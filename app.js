@@ -18,7 +18,6 @@ bot.on('message', message => {
 		let command = commands[commandName];
 		if (typeof command === 'string') command = commands[command]; // Alias
 		try {
-			throw new Error();
 			command(message, args, commandName);
 		} catch (err) {
 			console.error('An error occurred:\n' + err.stack);
