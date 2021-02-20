@@ -142,19 +142,38 @@ function formatBoosts(boosts) {
 async function getItem(itemName, existingQuery) {
 	itemName = sanitizeText(itemName);
 	if (itemName in aliases) itemName = aliases[itemName];
-	const query = existingQuery;
-	query.name = itemName;
+	existingQuery.name = itemName;
 
 	const db = await connect();
 	const items = await db.collection(process.env.DB_COLLECTION);
 
-	let results = items.find(query).sort({ level: -1 }).limit(1);
+	const pipeline = [
+		{ $match: existingQuery },
+		// Temporary items are to be at the bottom of the search, followed by special offer and DC items
+		{
+			$addFields: {
+				priority: {
+					$switch: {
+						branches: [
+							{ case: { $in: ['temporary', { $ifNull: ['$tags', []] }] }, then: -3 },
+							{ case: { $in: ['so', { $ifNull: ['$tags', []] }] }, then: -2 },
+							{ case: { $in: ['dc', { $ifNull: ['$tags', []] }] }, then: -1 },
+						],
+						default: 0
+					}
+				}
+			}
+		},
+		{ $sort: { level: -1, priority: -1 } },
+		{ $limit: 1 }
+	];
+	let results = items.aggregate(pipeline);
 	let item = await results.next();
 	// Do a text search instead if no exact match is found
 	if (!item) {
-		delete query.name;
-		query.$text = { $search: '"' + itemName + '"' };
-		const results = items.find(query).sort({ level: -1 }).limit(1);
+		delete existingQuery.name;
+		existingQuery.$text = { $search: '"' + itemName + '"' };
+		results = items.aggregate(pipeline);
 		item = await results.next();
 	}
 	return item;
@@ -172,10 +191,10 @@ exports.commands = {
 			return channel.send(`Usage: ${CT}${commandName} \`[name]\` / \`[max level (optional)]\``);
 		}
 
-		const query = { tags: { $ne: 'temporary' } };
+		const query = {};
 		if (maxLevel) query.level = { $lte: Number(maxLevel) };
-		if (commandName in {'wep': 1, 'weap': 1, 'weapon': 1}) query.category = 'weapon';
-		else if (commandName in {'acc': 1, 'accessory': 1}) query.category = 'accessory';
+		if (commandName in { 'wep': 1, 'weap': 1, 'weapon': 1 }) query.category = 'weapon';
+		else if (commandName in { 'acc': 1, 'accessory': 1 }) query.category = 'accessory';
 
 		const item = await getItem(itemName, query);
 		if (!item) return channel.send('No item was found');
@@ -250,57 +269,6 @@ exports.commands = {
 			}
 		});
 	},
-	// acc: 'accessory',
-	// accessory: async function ({ args, channel, command }) {
-	// 	const [item, maxLevel] = args.split('/');
-	// 	if (!item.trim() || (maxLevel && isNaN(maxLevel)))
-	// 		return channel.send(`Usage: ${CT}${command} \`[name]\` / \`[max level (optional)]\``);
-
-	// 	const query = { tags: { $ne: ['temporary'] } };
-	// 	if (maxLevel) query.level = { $lte: Number(maxLevel) };
-	// 	const accessory = await getItem(item, query);
-	// 	if (!accessory) return channel.send('No accessory was found.');
-
-	// 	const isCosmetic = accessory.tags.includes('cosmetic');
-	// 	const description = [
-	// 		`**Tags:** ${accessory.tags.map(tag => tag === 'se' ? 'Seasonal': capitalize(tag)).join(', ') || 'None'}`,
-	// 		`**Level:** ${accessory.level}`,
-	// 		`**Type:** ${capitalize(accessory.type)}`,
-	// 		...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(accessory.bonuses)}`],
-	// 		...isCosmetic ? [] : [`**Resists:** ${formatBoosts(accessory.resists)}`],
-	// 		...accessory.modifies ? [`**Modifies:**: ${accessory.modifies}`]: []
-	// 	];
-
-	// 	const fields = [];
-	// 	if (accessory.skill) fields.push({
-	// 		name: 'Trinket Skill',
-	// 		value: [
-	// 			`\n**Effect:** ${accessory.skill.effect}`,
-	// 			`**Mana Cost:** ${accessory.skill.manaCost}`,
-	// 			`**Cooldown:** ${accessory.skill.cooldown}`,
-	// 			`**Damage Type:** ${capitalize(accessory.skill.damageType || 'N/A')}`,
-	// 			`**Element:** ${(accessory.skill.element || []).map(elem => capitalize(elem)).join(' / ')}`
-	// 		],
-	// 		inline: true,
-	// 	});
-	// 	if (accessory.images && accessory.images.length > 1) {
-	// 		fields.push({
-	// 			name: 'Images',
-	// 			value: accessory.images.map((imageLink, index) => `[Appearance ${index + 1}](${imageLink})`).join(', ')
-	// 		});
-	// 	}
-
-	// 	channel.send({ embed:
-	// 		{
-	// 			title: accessory.title,
-	// 			url: accessory.link,
-	// 			description: description.join('\n'),
-	// 			fields,
-	// 			image: { url: accessory.images && accessory.images.length === 1 ? accessory.images[0] : null },
-	// 			footer: { text: accessory.colorCustom ? 'This item is color-custom' : null }
-	// 		}
-	// 	});
-	// },
 
 	sort: async function ({ channel }, args) {
 		const embed = (text, title) => { 
