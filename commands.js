@@ -146,7 +146,7 @@ async function getItem(itemName, existingQuery) {
 	query.name = itemName;
 
 	const db = await connect();
-	const items = await db.collection('items');
+	const items = await db.collection(process.env.DB_COLLECTION);
 
 	let results = items.find(query).sort({ level: -1 }).limit(1);
 	let item = await results.next();
