@@ -186,9 +186,9 @@ exports.commands = {
 			...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
 			...isCosmetic ? [] : [`**Resists:** ${formatBoosts(item.resists)}`],
 		];
-		const specialFields = [];
-		for (const special of item.specials) {
-			specialFields.push({
+		const embedFields = [];
+		for (const special of item.specials || []) {
+			embedFields.push({
 				name: 'Weapon Special',
 				value: [
 					`**Activation:** ${capitalize(special.activation)}`,
@@ -200,13 +200,20 @@ exports.commands = {
 				inline: true
 			});
 		}
+		if (item.images && item.images.length > 1)
+			embedFields.push({
+				name: 'Images',
+				value: item.images.map((imageLink, index) => `[Appearance ${index + 1}](${imageLink})`).join(', ')
+			});
+
 		channel.send({ embed:
 			{
 				title: item.title,
 				url: item.link,
 				description: description.join('\n'),
-				fields: specialFields,
-				image: { url: item.images ? item.images[0] : null },
+				fields: embedFields,
+				image: { url: item.images && item.images.length === 1 ? item.images[0] : null },
+				footer: { text: item.colorCustom ? 'This item is color-custom' : null }
 			}
 		});
 	},
@@ -243,12 +250,21 @@ exports.commands = {
 			],
 			inline: true,
 		});
+		if (accessory.images && accessory.images.length > 1) {
+			fields.push({
+				name: 'Images',
+				value: accessory.images.map((imageLink, index) => `[Appearance ${index + 1}](${imageLink})`).join(', ')
+			});
+		}
+
 		channel.send({ embed:
 			{
 				title: accessory.title,
 				url: accessory.link,
 				description: description.join('\n'),
-				fields
+				fields,
+				image: { url: accessory.images && accessory.images.length === 1 ? accessory.images[0] : null },
+				footer: { text: accessory.colorCustom ? 'This item is color-custom' : null }
 			}
 		});
 	},
