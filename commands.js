@@ -161,45 +161,78 @@ async function getItem(itemName, existingQuery) {
 }
 
 exports.commands = {
-	wep: 'weapon',
-	weapon: async function ({ args, channel }) {
+	wep: 'item',
+	weap: 'item',
+	weapon: 'item',
+	acc: 'item',
+	accessory: 'item',
+	item: async function ({ channel }, args, commandName) {
 		const [itemName, maxLevel] = args.split('/');
 		if (!itemName.trim() || (maxLevel && isNaN(maxLevel))) {
-			return channel.send(`Usage: ${CT} \`[name]\` / \`[max level (optional)]\``);
+			return channel.send(`Usage: ${CT}${commandName} \`[name]\` / \`[max level (optional)]\``);
 		}
 
 		const query = { tags: { $ne: 'temporary' } };
 		if (maxLevel) query.level = { $lte: Number(maxLevel) };
-		const item = await getItem(itemName, query);
-		if (!item) return channel.send('No weapon was found');
+		if (commandName in {'wep': 1, 'weap': 1, 'weapon': 1}) query.category = 'weapon';
+		else if (commandName in {'acc': 1, 'accessory': 1}) query.category = 'accessory';
 
-		// Cosmetic items don't have any stats and don't do any damage
-		const isCosmetic = item.tags && item.tags.includes('cosmetic');
-		const description = [
-			`**Tags:** ${(item.tags || [])
-				.map(tag => tag === 'se' ? 'Seasonal': capitalize(tag))
-				.join(', ') || 'None'}`,
-			`**Level:** ${item.level}`,
-			`**Type:** ${item.type.map(capitalize).join(' / ')}`,
-			...isCosmetic ? [] : [`**Damage:** ${item.damage.map(String).join('-') || 'Scaled'}`],
-			`**Element:** ${item.elements.map(capitalize).join(' / ')}`,
-			...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
-			...isCosmetic ? [] : [`**Resists:** ${formatBoosts(item.resists)}`],
-		];
+		const item = await getItem(itemName, query);
+		if (!item) return channel.send('No item was found');
+
 		const embedFields = [];
-		for (const special of item.specials || []) {
-			embedFields.push({
-				name: 'Weapon Special',
+		let description = null;
+		const isCosmetic = item.tags && item.tags.includes('cosmetic');
+		if (item.category === 'weapon') {
+			description = [
+				`**Tags:** ${(item.tags || [])
+					.map(tag => tag === 'se' ? 'Seasonal': capitalize(tag))
+					.join(', ') || 'None'}`,
+				`**Level:** ${item.level}`,
+				`**Type:** ${item.type.map(capitalize).join(' / ')}`,
+				...isCosmetic ? [] : [`**Damage:** ${item.damage.map(String).join('-') || 'Scaled'}`],
+				`**Element:** ${item.elements.map(capitalize).join(' / ')}`,
+				...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
+				...isCosmetic ? [] : [`**Resists:** ${formatBoosts(item.resists)}`],
+			];
+			const embedFields = [];
+			for (const special of item.specials || []) {
+				embedFields.push({
+					name: 'Weapon Special',
+					value: [
+						`**Activation:** ${capitalize(special.activation)}`,
+						`**Effect:** ${special.effect}`,
+						...special.elements ? [] : [`**Element:** ${special.elements.map(capitalize).join(' / ')}`],
+						...!(special.activation in { 'specific enemy': 1, 'click weapon': 1 }) ?
+							[] : [`**Rate:** ${special.rate * 100}%`],
+					].join('\n'),
+					inline: true
+				});
+			}
+		} else if (item.category === 'accessory') {
+			description = [
+				`**Tags:** ${item.tags.map(tag => tag === 'se' ? 'Seasonal': capitalize(tag)).join(', ') || 'None'}`,
+				`**Level:** ${item.level}`,
+				`**Type:** ${capitalize(item.type)}`,
+				...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
+				...isCosmetic ? [] : [`**Resists:** ${formatBoosts(item.resists)}`],
+				...item.modifies ? [`**Modifies:**: ${item.modifies}`]: []
+			];
+	
+			const fields = [];
+			if (item.skill) fields.push({
+				name: 'Trinket Skill',
 				value: [
-					`**Activation:** ${capitalize(special.activation)}`,
-					`**Effect:** ${special.effect}`,
-					...special.elements ? [] : [`**Element:** ${special.elements.map(capitalize).join(' / ')}`],
-					...!(special.activation in { 'specific enemy': 1, 'click weapon': 1 }) ?
-						[] : [`**Rate:** ${special.rate * 100}%`],
-				].join('\n'),
-				inline: true
+					`\n**Effect:** ${item.skill.effect}`,
+					`**Mana Cost:** ${item.skill.manaCost}`,
+					`**Cooldown:** ${item.skill.cooldown}`,
+					`**Damage Type:** ${capitalize(item.skill.damageType || 'N/A')}`,
+					`**Element:** ${(item.skill.element || []).map(elem => capitalize(elem)).join(' / ')}`
+				],
+				inline: true,
 			});
 		}
+
 		if (item.images && item.images.length > 1)
 			embedFields.push({
 				name: 'Images',
@@ -217,59 +250,59 @@ exports.commands = {
 			}
 		});
 	},
-	acc: 'accessory',
-	accessory: async function ({ args, channel, command }) {
-		const [item, maxLevel] = args.split('/');
-		if (!item.trim() || (maxLevel && isNaN(maxLevel)))
-			return channel.send(`Usage: ${CT}${command} \`[name]\` / \`[max level (optional)]\``);
+	// acc: 'accessory',
+	// accessory: async function ({ args, channel, command }) {
+	// 	const [item, maxLevel] = args.split('/');
+	// 	if (!item.trim() || (maxLevel && isNaN(maxLevel)))
+	// 		return channel.send(`Usage: ${CT}${command} \`[name]\` / \`[max level (optional)]\``);
 
-		const query = { tags: { $ne: ['temporary'] } };
-		if (maxLevel) query.level = { $lte: Number(maxLevel) };
-		const accessory = await getItem(item, query);
-		if (!accessory) return channel.send('No accessory was found.');
+	// 	const query = { tags: { $ne: ['temporary'] } };
+	// 	if (maxLevel) query.level = { $lte: Number(maxLevel) };
+	// 	const accessory = await getItem(item, query);
+	// 	if (!accessory) return channel.send('No accessory was found.');
 
-		const isCosmetic = accessory.tags.includes('cosmetic');
-		const description = [
-			`**Tags:** ${accessory.tags.map(tag => tag === 'se' ? 'Seasonal': capitalize(tag)).join(', ') || 'None'}`,
-			`**Level:** ${accessory.level}`,
-			`**Type:** ${capitalize(accessory.type)}`,
-			...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(accessory.bonuses)}`],
-			...isCosmetic ? [] : [`**Resists:** ${formatBoosts(accessory.resists)}`],
-			...accessory.modifies ? [`**Modifies:**: ${accessory.modifies}`]: []
-		];
+	// 	const isCosmetic = accessory.tags.includes('cosmetic');
+	// 	const description = [
+	// 		`**Tags:** ${accessory.tags.map(tag => tag === 'se' ? 'Seasonal': capitalize(tag)).join(', ') || 'None'}`,
+	// 		`**Level:** ${accessory.level}`,
+	// 		`**Type:** ${capitalize(accessory.type)}`,
+	// 		...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(accessory.bonuses)}`],
+	// 		...isCosmetic ? [] : [`**Resists:** ${formatBoosts(accessory.resists)}`],
+	// 		...accessory.modifies ? [`**Modifies:**: ${accessory.modifies}`]: []
+	// 	];
 
-		const fields = [];
-		if (accessory.skill) fields.push({
-			name: 'Trinket Skill',
-			value: [
-				`\n**Effect:** ${accessory.skill.effect}`,
-				`**Mana Cost:** ${accessory.skill.manaCost}`,
-				`**Cooldown:** ${accessory.skill.cooldown}`,
-				`**Damage Type:** ${capitalize(accessory.skill.damageType || 'N/A')}`,
-				`**Element:** ${(accessory.skill.element || []).map(elem => capitalize(elem)).join(' / ')}`
-			],
-			inline: true,
-		});
-		if (accessory.images && accessory.images.length > 1) {
-			fields.push({
-				name: 'Images',
-				value: accessory.images.map((imageLink, index) => `[Appearance ${index + 1}](${imageLink})`).join(', ')
-			});
-		}
+	// 	const fields = [];
+	// 	if (accessory.skill) fields.push({
+	// 		name: 'Trinket Skill',
+	// 		value: [
+	// 			`\n**Effect:** ${accessory.skill.effect}`,
+	// 			`**Mana Cost:** ${accessory.skill.manaCost}`,
+	// 			`**Cooldown:** ${accessory.skill.cooldown}`,
+	// 			`**Damage Type:** ${capitalize(accessory.skill.damageType || 'N/A')}`,
+	// 			`**Element:** ${(accessory.skill.element || []).map(elem => capitalize(elem)).join(' / ')}`
+	// 		],
+	// 		inline: true,
+	// 	});
+	// 	if (accessory.images && accessory.images.length > 1) {
+	// 		fields.push({
+	// 			name: 'Images',
+	// 			value: accessory.images.map((imageLink, index) => `[Appearance ${index + 1}](${imageLink})`).join(', ')
+	// 		});
+	// 	}
 
-		channel.send({ embed:
-			{
-				title: accessory.title,
-				url: accessory.link,
-				description: description.join('\n'),
-				fields,
-				image: { url: accessory.images && accessory.images.length === 1 ? accessory.images[0] : null },
-				footer: { text: accessory.colorCustom ? 'This item is color-custom' : null }
-			}
-		});
-	},
+	// 	channel.send({ embed:
+	// 		{
+	// 			title: accessory.title,
+	// 			url: accessory.link,
+	// 			description: description.join('\n'),
+	// 			fields,
+	// 			image: { url: accessory.images && accessory.images.length === 1 ? accessory.images[0] : null },
+	// 			footer: { text: accessory.colorCustom ? 'This item is color-custom' : null }
+	// 		}
+	// 	});
+	// },
 
-	sort: async function ({ args, channel }) {
+	sort: async function ({ channel }, args) {
 		const embed = (text, title) => { 
 			const body = {};
 			body.description = text;
