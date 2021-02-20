@@ -61,7 +61,7 @@ const bonuses = new Set([
 function capitalize(text) {
 	const fullCapWords = new Set([ // These words are fully capitalized
 		'str', 'int', 'dex', 'luk', 'cha',
-		'wis', 'end', 'dm', 'so', 'dc', 'da'
+		'wis', 'end', 'dm', 'so', 'dc', 'da', 'ak'
 	]);
 	if (fullCapWords.has(text)) return text.toUpperCase();
 
@@ -338,8 +338,7 @@ exports.commands = {
 
 		const db = await connect();
 		let items = null;
-		if (itemType === 'weapon') items = await db.collection('weapons');
-		else items = await db.collection('accessories');
+		items = await db.collection(process.env.DB_COLLECTION);
 
 		const filter = { newField: { $exists: true, $ne: 0 } };
 		if (!isNaN(maxLevel)) filter.level = { $lte: maxLevel };
