@@ -417,7 +417,7 @@ exports.commands = {
 			if (!itemGroup.items.length) continue;
 
 			const items = itemGroup.items.map(item => {
-				const tags = item.tags.length ? `[${item.tags.map(capitalize).join(', ')}]` : '';
+				const tags = item.tags ? `[${item.tags.map(capitalize).join(', ')}]` : '';
 				return `${item.title} _(lv. ${item.level})_ ${tags}`.trim();
 			});
 			const message = `**${++index})** ${items.join(' / ')} **_(${itemGroup.newField})_**\n\n`;
