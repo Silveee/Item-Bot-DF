@@ -1,14 +1,16 @@
+# The token to be prefixed to commands
 COMMAND_TOKEN="!"
 
 BOT_TOKEN=""
 
+# Database info
 DB_HOST="127.0.0.1"
 DB_PORT="27017"
 DB_NAME="items"
+DB_COLLECTION="items"
 DB_AUTH_MECHANISM="DEFAULT"
-
 DB_USER=""
 DB_PASS=""
-DB_ADMIN_USER=""
-DB_ADMIN_PASS=""
 
+# The ID to be pinged in case an error occurs
+DEV_ID=""

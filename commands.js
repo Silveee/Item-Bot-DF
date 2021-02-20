@@ -38,169 +38,244 @@ const aliases = {
 	'sf': 'soulforged scythe',
 	'lh': 'lucky hammer',
 };
-const validTypes = new Set(['weapon', 'accessory', 'cape', 'wing', 'helm', 'ring', 'belt', 'necklace', 'trinket', 'bracer']);
-const bonuses = new Set(['block', 'dodge', 'parry', 'crit', 'magic def', 'pierce def', 'melee def', 'wis', 'end', 'cha', 'luk', 'int', 'dex', 'str', 'bonus']);
+const validTypes = new Set([
+	'weapon', 'accessory', 'cape', 'wing', 'helm',
+	'ring', 'belt', 'necklace', 'trinket', 'bracer'
+]);
+const bonuses = new Set([
+	'block', 'dodge', 'parry', 'crit', 'magic def', 'pierce def', 'melee def',
+	'wis', 'end', 'cha', 'luk', 'int', 'dex', 'str', 'bonus'
+]);
 
-function capitalize(word) {
-	// Capitalizes the first letter of every other word
+/**
+ * Capitalizes the first letter of every other word in the input text, with
+ * few exceptions, which are instead capitalized fully.
+ *
+ * @param {String} text
+ *   Text to be capitalized
+ *
+ * @return {String}
+ *   String with alternate words in the input text capitalized, or the text
+ *   fully capitalized if the text is one of several values
+ */
+function capitalize(text) {
+	const fullCapWords = new Set([ // These words are fully capitalized
+		'str', 'int', 'dex', 'luk', 'cha',
+		'wis', 'end', 'dm', 'so', 'dc', 'da'
+	]);
+	if (fullCapWords.has(text)) return text.toUpperCase();
 
-	// Except these, though; They're fully capitalized
-	if (word in { 'str':1, 'int':1, 'dex':1, 'luk':1, 'cha':1, 'wis':1, 'end':1, 'dm':1, 'so':1, 'dc':1, 'da':1 }) return word.toUpperCase();
-	if (!word || !word.trim()) return word;
-	return word.trim().split(' ')
-		.filter(word => !!word)
+	if (!text || !text.trim()) return text;
+
+	return text
+		.trim()
+		.split(' ')
 		.map(word => word[0].toUpperCase() + word.slice(1)).join(' ');
 }
-function sanitizeName(name) {
-	// Lowercases names, removes leading and trailing whitespace, and removes unnecessary characters
-	return name.toLowerCase().replace(/[.,\-"()]/g, ' ').replace(/’/g, '\'').replace(/ +/g, ' ').trim();
-}
-function formatBoosts(boosts) {
-	// Displays resistances and bonuses the correct way
-	const formatData = boost => {
-		const name = capitalize(boost.k);
-		const value = (boost.v < 0 ? '' : '+') + boost.v;
-		return name + ' ' + value;
-	};
-	return boosts.map(formatData).join(', ') || 'None';
+
+/**
+ * Does the following:
+ * - Lowercases input text
+ * - Removes leading and trailing whitespace
+ * - Removes accents from input text characters
+ * - Removes brackets, quotes, and backticks
+ * - Replaces all other alphanumeric characters with a single whitespace
+ * - Replaces all instances of more than one whitespace with a single whitespace
+ * Example: "Alina's Battle-Bouquet Staff" -> "alinas battle bouquet staff"
+ *
+ * @param {String} text
+ *   Input text to be sanitized
+ *
+ * @return {String}
+ *   Sanitized text
+ */
+function sanitizeText(text) {
+	return text.toLowerCase()
+		// Replace accented characters with their non-accented versions
+		.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+		.replace(/[()'"“”‘’`]/g, '') // Remove brackets, quotes, and backticks
+		// Replace all other non-alphanumeric character (other than |)
+		// sequences with a single whitespace
+		.replace(/[^a-z0-9|]+/g, ' ')
+		.trim();
 }
 
-async function getItem(type, itemName, existingQuery) {
-	itemName = sanitizeName(itemName);
+/**
+ * Formats an array of boosts (resistances or stat bonuses) into a comma-separated list
+ * Example: [{ k: 'int', v: 3 }, { k: 'melee def', v: -1 }] -> 'INT +3, Melee Def -1'
+ * 
+ * @param {{ k: String, v: Number }[] | null} boosts
+ *   An array of objects listing each boost's name (k) and value (v)
+ *
+ * @return {String}
+ *   A comma separated list of boost names and their corresponding values, obtained by:
+ *   - Capitalizing each boost name
+ *   - Prepending a '+' to the boost's value if it is > 0
+ *   - Joining boost's name and value together with a space
+ *   - Joining each string of boost name/value pairs with ', '
+ */
+function formatBoosts(boosts) {
+	return (boosts || [])
+		.map(boost => {
+			const name = capitalize(boost.k);
+			const value = (boost.v < 0 ? '' : '+') + boost.v;
+			return name + ' ' + value;
+		})
+		.join(', ') || 'None';
+}
+
+/**
+ * Get details of an item from the database. The input item name is sanitized and converted to its original form
+ * if it is an alias of another item name.
+ * If the exact item name is not found in the database, a text search is done in descending order of level.
+ * The details of the first result is then returned instead
+ *
+ * @param {String} itemName
+ *   Name of the item to be fetched from the database
+ * @param {Object} existingQuery
+ *   An existing mongoDB query object to be modified with filter queries before being run
+ *
+ * @return {Promise<Object>}
+ *   Promise that resolves an object containing the details of the item or the closest match.
+ *   Resolves null if no item is found
+ */
+async function getItem(itemName, existingQuery) {
+	itemName = sanitizeText(itemName);
 	if (itemName in aliases) itemName = aliases[itemName];
-	const query = existingQuery;
-	query.name = itemName;
+	existingQuery.name = itemName;
 
 	const db = await connect();
-	const items = await db.collection(type);
+	const items = await db.collection(process.env.DB_COLLECTION);
 
-	let results = items.find(query).sort({ level: -1 }).limit(1);
+	const pipeline = [
+		{ $match: existingQuery },
+		// Temporary items are to be at the bottom of the search, followed by special offer and DC items
+		{
+			$addFields: {
+				priority: {
+					$switch: {
+						branches: [
+							{ case: { $in: ['temporary', { $ifNull: ['$tags', []] }] }, then: -3 },
+							{ case: { $in: ['so', { $ifNull: ['$tags', []] }] }, then: -2 },
+							{ case: { $in: ['dc', { $ifNull: ['$tags', []] }] }, then: -1 },
+						],
+						default: 0
+					}
+				}
+			}
+		},
+		{ $sort: { level: -1, priority: -1 } },
+		{ $limit: 1 }
+	];
+	let results = items.aggregate(pipeline);
 	let item = await results.next();
-	// Do a text search if no character is found
+	// Do a text search instead if no exact match is found
 	if (!item) {
-		delete query.name;
-		query.$text = { $search: '"' + itemName + '"' };
-		const results = items.find(query).sort({ level: -1 }).limit(1);
+		delete existingQuery.name;
+		existingQuery.$text = { $search: '"' + itemName + '"' };
+		results = items.aggregate(pipeline);
 		item = await results.next();
 	}
 	return item;
 }
 
-// function parseNumberArgs(args) {
-// 	// Converts a query of the form (operator)(number)[, (operator)(number)[, ...]] into a mongodb query object
-// 	// Where (operator) is =, <, >, <=, or >=
-// 	// If (operator) is missing, = is used by default
-// 	const query = {};
-// 	args = args.split(',').map(arg => arg.trim());
-// 	for (const arg of args) {
-// 		if (arg.slice(0, 2) === '<=') query.$lte = Number(arg.slice(2));
-// 		else if (arg.slice(0, 2) === '>=') query.$gte = Number(arg.slice(2));
-// 		else if (arg[0] === '=') query.$eq = Number(arg.slice(1));
-// 		else if (arg[0] === '>') query.$gt = Number(arg.slice(1));
-// 		else if (arg[0] === '<') query.$lt = Number(arg.slice(1));
-// 		else query.$eq = Number(arg);
-// 	}
-// 	return query;
-// }
-
-// function parseNamedNumberArgs(args) {
-// 	// Converts a query of the form (name 1)(operator)(number)[, (name 2)(operator)(number)[, ...]] into a mongodb query object
-// 	// (name) is any string without whitespace
-// 	// (operator) is =, <, >, <=, or >=
-// 	// If (operator) is missing, = is used by default
-// 	const query = {};
-// 	args = args.split(',').map(arg => arg.trim());
-// 	for (const arg of args) {
-// 		if (arg.slice(0, 2) === '<=') query.$lte = Number(arg.slice(2));
-// 		else if (arg.slice(0, 2) === '>=') query.$gte = Number(arg.slice(2));
-// 		else if (arg[0] === '=') query.$eq = Number(arg.slice(1));
-// 		else if (arg[0] === '>') query.$gt = Number(arg.slice(1));
-// 		else if (arg[0] === '<') query.$lt = Number(arg.slice(1));
-// 		else query.$eq = Number(arg);
-// 	}
-// 	return query;
-// }
-
 exports.commands = {
-	wep: 'weapon',
-	weapon: async function ({ args, channel }) {
-		const [item, maxLevel] = args.split('/');
-		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${CT} \`[name]\` / \`[max level (optional)]\``);
-
-		const query = { tags: { $ne: 'temporary' } };
-		if (maxLevel) query.level = { $lte: Number(maxLevel) };
-		const weapon = await getItem('weapons', item, query);
-		if (!weapon) return channel.send('No weapon was found');
-
-		const description = [
-			`**Tags:** ${weapon.tags.map(capitalize).join(', ') || 'None'}`,
-			`**Level:** ${weapon.level}`,
-			`**Type:** ${weapon.type.map(capitalize).join(' / ')}`,
-			`**Damage:** ${weapon.damage.map(String).join('-') || 'Scaled'}`,
-			`**Element:** ${weapon.elements.map(capitalize).join(' / ')}`,
-			`**Bonuses:** ${formatBoosts(weapon.bonuses)}`,
-			`**Resists:** ${formatBoosts(weapon.resists)}`,
-			weapon.link,
-		];
-		const specialFields = [];
-		for (const special of weapon.specials) {
-			const specialField = [];
-			specialField.push(`**Activation:** ${capitalize(special.activation)}`);
-			specialField.push(`**Effect:** ${special.effect}`);
-			if (special.elements.length) specialField.push(`**Element:** ${special.elements.map(capitalize).join(' / ')}`);
-			specialField.push(`**Rate:** ${special.rate * 100}%`);
-			specialFields.push({ name: 'Weapon Special', value: specialField.join('\n'), inline: true });
+	wep: 'item',
+	weap: 'item',
+	weapon: 'item',
+	acc: 'item',
+	accessory: 'item',
+	item: async function ({ channel }, args, commandName) {
+		const [itemName, maxLevel] = args.split('/');
+		if (!itemName.trim() || (maxLevel && isNaN(maxLevel))) {
+			return channel.send(`Usage: ${CT}${commandName} \`[name]\` / \`[max level (optional)]\``);
 		}
-		channel.send({ embed:
-			{
-				title: weapon.title,
-				description: description.join('\n'),
-				fields: specialFields
-			}
-		});
-	},
-	acc: 'accessory',
-	accessory: async function ({ args, channel, command }) {
-		const [item, maxLevel] = args.split('/');
-		if (!item.trim() || (maxLevel && isNaN(maxLevel))) return channel.send(`Usage: ${CT}${command} \`[name]\` / \`[max level (optional)]\``);
 
-		const query = { tags: { $ne: ['temporary'] } };
+		const query = {};
 		if (maxLevel) query.level = { $lte: Number(maxLevel) };
-		const accessory = await getItem('accessories', item, query);
-		if (!accessory) return channel.send('No accessory was found.');
+		if (commandName in { 'wep': 1, 'weap': 1, 'weapon': 1 }) query.category = 'weapon';
+		else if (commandName in { 'acc': 1, 'accessory': 1 }) query.category = 'accessory';
 
-		const description = [
-			`**Tags:** ${accessory.tags.map(capitalize).join(', ') || 'None'}`,
-			`**Level:** ${accessory.level}`,
-			`**Type:** ${capitalize(accessory.type)}`,
-			`**Bonuses:** ${formatBoosts(accessory.bonuses)}`,
-			`**Resists:** ${formatBoosts(accessory.resists)}`,
-		];
-		if (accessory.modifies) description.push(`**Modifies:**: ${accessory.modifies}`);
+		const item = await getItem(itemName, query);
+		if (!item) return channel.send('No item was found');
 
-		const fields = [];
-		if (accessory.skill) fields.push({
-			name: 'Trinket Skill',
-			value: [
-				`\n**Effect:** ${accessory.skill.effect}`,
-				`**Mana Cost:** ${accessory.skill.manaCost}`,
-				`**Cooldown:** ${accessory.skill.cooldown}`,
-				`**Damage Type:** ${capitalize(accessory.skill.damageType)}`,
-				`**Element:** ${capitalize(accessory.skill.element)}`
-			],
-			inline: true,
-		});
-		description.push(accessory.link);
+		const embedFields = [];
+		let description = null;
+		const isCosmetic = item.tags && item.tags.includes('cosmetic');
+		if (item.category === 'weapon') {
+			description = [
+				`**Tags:** ${(item.tags || [])
+					.map(tag => tag === 'se' ? 'Seasonal': capitalize(tag))
+					.join(', ') || 'None'}`,
+				`**Level:** ${item.level}`,
+				`**Type:** ${item.type.map(capitalize).join(' / ')}`,
+				...isCosmetic ? [] : [`**Damage:** ${item.damage.map(String).join('-') || 'Scaled'}`],
+				`**Element:** ${item.elements.map(capitalize).join(' / ')}`,
+				...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
+				...isCosmetic ? [] : [`**Resists:** ${formatBoosts(item.resists)}`],
+			];
+			for (const special of item.specials || []) {
+				embedFields.push({
+					name: 'Weapon Special',
+					value: [
+						`**Activation:** ${capitalize(special.activation)}`,
+						`**Effect:** ${special.effect}`,
+						...special.elements ? [`**Element:** ${special.elements.map(capitalize).join(' / ')}`] : [],
+						...special.activation in { 'specific enemy': 1, 'click weapon': 1 } ?
+							[] : [`**Rate:** ${special.rate * 100}%`],
+					].join('\n'),
+					inline: true
+				});
+			}
+		} else if (item.category === 'accessory') {
+			description = [
+				`**Tags:** ${item.tags.map(tag => tag === 'se' ? 'Seasonal': capitalize(tag)).join(', ') || 'None'}`,
+				`**Level:** ${item.level}`,
+				`**Type:** ${capitalize(item.type)}`,
+				...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
+				...isCosmetic ? [] : [`**Resists:** ${formatBoosts(item.resists)}`],
+				...item.modifies ? [`**Modifies:**: ${item.modifies}`]: []
+			];
+	
+			if (item.skill) embedFields.push({
+				name: 'Trinket Skill',
+				value: [
+					`\n**Effect:** ${item.skill.effect}`,
+					`**Mana Cost:** ${item.skill.manaCost}`,
+					`**Cooldown:** ${item.skill.cooldown}`,
+					`**Damage Type:** ${capitalize(item.skill.damageType || 'N/A')}`,
+					`**Element:** ${(item.skill.elements || []).map(elem => capitalize(elem)).join(' / ')}`
+				],
+				inline: true,
+			});
+		}
+
+		if (item.images && item.images.length > 1)
+			embedFields.push({
+				name: 'Images',
+				value: item.images.map((imageLink, index) => `[Appearance ${index + 1}](${imageLink})`).join(', ')
+			});
+		else if (item.images && item.images.length === 1 && item.images[0].includes('imgur')) {
+			description.push(`[Appearance](${item.images[0]})`);
+		}
+
 		channel.send({ embed:
 			{
-				title: accessory.title,
+				title: item.title,
+				url: item.link,
 				description: description.join('\n'),
-				fields
+				fields: embedFields,
+				image: { url: item.images && item.images.length === 1 ? item.images[0] : null },
+				footer: {
+					text: item.colorCustom ?
+						`This item is color-custom to your ${item.colorCustom.join(', ')} color`
+						: null
+				}
 			}
 		});
 	},
 
-	sort: async function ({ args, channel }) {
+	sort: async function ({ channel }, args) {
 		const embed = (text, title) => { 
 			const body = {};
 			body.description = text;
@@ -208,26 +283,38 @@ exports.commands = {
 			return { embed: body };
 		};
 
-		let [itemType, sortExp, maxLevel] = args.split(',').map(arg => arg.trim().toLowerCase()) || [];
+		let [itemType, sortExp, maxLevel] = args
+			.split(',')
+			.map(arg => arg.trim().toLowerCase()) || [];
 		if (!itemType || !sortExp)
-			return channel.send(embed([
-				`Usage: ${CT}sort \`item type\`, \`attribute to sort by\`, \`max level (optional)\``,
-				`\`item type\` - Valid types are: _${[...validTypes].join(', ')}_. Abbreviations such as 'acc' and 'wep' also work.`,
-				'`attribute to sort by` can be any stat bonus or resistance _(eg. STR, Melee Def, Bonus, All, Ice, Health etc.)_, or in the case of weapons, _damage_. Add a - sign at the beginning of the `attribute` to sort in ascending order.',
-			].join('\n')));
-		if (maxLevel && maxLevel.match(/[^\-0-9]/))
+			return channel.send(embed(
+				`Usage: ${CT}sort\`item type\`, \`attribute to sort by\`, \`max level (optional)\\n` +
+				`\`item type\` - Valid types are: _${[...validTypes].join(', ')}_. ` +
+				"Abbreviations such as 'acc' and 'wep' also work.\n" +
+				'`attribute to sort by` can be any stat bonus or resistance ' +
+				'_(eg. STR, Melee Def, Bonus, All, Ice, Health etc.)_, or in the case of weapons, _damage_. ' +
+				'Add a - sign at the beginning of the `attribute` to sort in ascending order.'
+			));
+		if (maxLevel && maxLevel.match(/[^\-0-9]/)) {
 			return channel.send(embed(`"${maxLevel}" is not a valid number.`));
+		}
+
 		maxLevel = Number(maxLevel);
-		if (maxLevel < 0 || maxLevel > 90)
+		if (maxLevel < 0 || maxLevel > 90) {
 			return channel.send(embed(`The max level should be between 0 and 90 inclusive. ${maxLevel} is not valid.`));
-		
-		const originalItemType = itemType;
-		if (itemType.slice(-1) === 's') itemType = itemType.slice(0, -1); // trim trailing s
+		}
+		if (itemType.slice(-1) === 's') itemType = itemType.slice(0, -1); // strip trailing s
 
 		if (itemType === 'wep') itemType = 'weapon';
-		else if (itemType === 'acc' || itemType === 'accessorie') itemType = 'accessory'; // "accessorie" because the trailing s would have been removed
+		// "accessorie" because the trailing s would have been removed
+		else if (itemType === 'acc' || itemType === 'accessorie') itemType = 'accessory';
 		else if (itemType === 'helmet') itemType = 'helm';
-		if (!validTypes.has(itemType)) return channel.send(embed(`"${originalItemType}" is not a valid item type. Valid types are: _${[...validTypes].join(', ')}_. "acc" and "wep" are valid abbreviations for accessories and weapons.`));
+		if (!validTypes.has(itemType)) {
+			return channel.send(embed(
+				`"${itemType}" is not a valid item type. Valid types are: _${[...validTypes].join(', ')}_. ` +
+				'"acc" and "wep" are valid abbreviations for accessories and weapons.'
+			));
+		}
 
 		sortExp = sortExp.trim().toLowerCase();
 		// Ignore search query if it contains an invalid character
@@ -280,7 +367,13 @@ exports.commands = {
 		// 	{ $limit: 10 }
 		// ];
 		const pipeline = [
-			{ $addFields: { damage: { $avg: '$damage' }, bonuses: { $arrayToObject: '$bonuses' }, resists: { $arrayToObject: '$resists' } } },
+			{
+				$addFields: {
+					damage: { $avg: '$damage' },
+					bonuses: { $arrayToObject: '$bonuses' },
+					resists: { $arrayToObject: '$resists' }
+				}
+			},
 			{ $addFields: { newField: '$' + sortExp } },
 			{ $match: filter },
 			{ $sort: { newField: sortOrder, level: -1 } },
@@ -289,7 +382,12 @@ exports.commands = {
 			// Remove documents that share the same item name
 			{ $group: { _id: { name: '$doc.name' }, doc: { $first: '$doc' } } },
 			// Group documents 
-			{ $group: { _id: '$doc.newField', newField: { $first: '$doc.newField' }, items: { $addToSet: { title: '$doc.title', level: '$doc.level', tags: '$doc.tags' } } } },
+			{
+				$group: {
+					_id: '$doc.newField', newField: { $first: '$doc.newField' }, 
+					items: { $addToSet: { title: '$doc.title', level: '$doc.level', tags: '$doc.tags' } }
+				}
+			},
 			{ $sort: { newField: sortOrder } },
 			{ $limit: 10 }
 		];
@@ -322,68 +420,4 @@ exports.commands = {
 		channel.send(embed(sorted.trim(), `Sort ${formattedItemType} by ${capitalize(originalExp)}`))
 			.catch(() => channel.send('An error occured'));
 	},
-
-	// search: 'query',
-	// query: async function (args, channel) {
-	// 	args = args.trim();
-	// 	if (!args)
-	// 		return channel.send('');
-	// 	const categories = { weapon: args.slice(0, 6).toLowerCase(), accessory: args.slice(0, 9).toLowerCase() };
-	// 	const isWeapon = categories.weapon === 'weapon';
-	// 	if (!isWeapon && categories.accessory !== 'accessory')
-	// 		return channel.send('Specify whether you\'re searching for a weapon or an accessory.');
-
-	// 	const category = isWeapon ? 'weapons' : 'accessories';
-	// 	args = args.substr((isWeapon ? 6 : 9) + 1);
-	// 	if (args.slice(0, 2) !== '--') return;
-	// 	args = args.slice(2).split('--');
-
-	// 	const filter = { tags: { $ne: 'temporary' } };
-	// 	const sortBy = { level: -1 };
-
-	// 	for (const line of args) {
-	// 		const firstSpace = line.indexOf(' ');
-	// 		const arg = firstSpace > -1 ? line.slice(0, firstSpace) : line;
-	// 		const value = firstSpace > -1 ? line.slice(firstSpace + 1) : '';
-
-	// 		if (arg === 'name') {
-	// 			const name = sanitizeName(value);
-	// 			if (!name) return channel.send('`name` is not valid.');
-	// 			filter.$or = [{ $text: { $search: '"' + name + '"' } }, { name }];
-	// 		}
-	// 		else if (arg === 'type') {
-	// 			const type = value.trim().toLowerCase();
-	// 			if (isWeapon && !(type in { 'key':1, 'axe':1, 'sword':1, 'mace':1, 'dagger':1, 'staff':1, 'wand':1, 'scythe':1 })) return channel.send('`type` is invalid.');
-	// 			else if (!(type in { 'cape':1, 'belt':1, 'necklace':1, 'helm':1, 'trinket':1, 'bracer':1 })) return channel.send('`type` is invalid.');
-	// 			filter.type = type;
-	// 		}
-	// 		else if (arg === 'tags') {
-	// 			const tags = value.split(',').map(t => t.trim().toLowerCase());
-	// 			filter.tags = { $all: tags };
-	// 		}
-	// 		else if (arg === 'element') {
-	// 			if (!isWeapon) return channel.send('Invalid argument "element"');
-	// 			const elements = value.split(',').map(t => t.toLowerCase().trim());
-	// 			filter.elements = { $all: elements };
-	// 		}
-	// 		else return channel.send(`Invalid argument "${arg}"`);
-	// 	}
-	// 	const db = await connect();
-	// 	const items = await db.collection(category);
-
-	// 	const pipeline = [
-	// 		{ $match: filter },
-	// 		{ $group: { _id: { link: '$name', level: '$level' }, doc: { $first: '$$ROOT' } } },
-	// 		{ $replaceRoot: { newRoot: '$doc' } },
-	// 		{ $sort: sortBy }, { $limit : 15 },
-	// 	];
-	// 	const results = items.aggregate(pipeline);
-
-	// 	const message = [];
-	// 	let item = null;
-	// 	while ((item = (await results.next())) !== null) 
-	// 		message.push(`**${item.title}:** ${item.link} *(lv. ${item.level})*`);
-
-	// 	channel.send(message.join('\n') || 'No results were found.');
-	// }
 };

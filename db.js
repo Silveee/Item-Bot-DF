@@ -3,14 +3,10 @@
 const format = require('util').format;
 const MongoClient = require('mongodb').MongoClient;
 
-const [user, pass] = process.mainModule.filename === __dirname + '/scrape.js' ?
-	[process.env.DB_ADMIN_USER, process.env.DB_ADMIN_PASS] :
-	[process.env.DB_USER, process.env.DB_PASS];
-
 const connection = MongoClient.connect(
 	format(
 		'mongodb://%s:%s@%s:%s/?authMechanism=%s&authSource=%s',
-		user, pass, process.env.DB_HOST, process.env.DB_PORT,
+		process.env.DB_USER, process.env.DB_PASS, process.env.DB_HOST, process.env.DB_PORT,
 		process.env.DB_AUTH_MECHANISM, process.env.DB_NAME,
 	),
 	{
