@@ -265,7 +265,11 @@ exports.commands = {
 				description: description.join('\n'),
 				fields: embedFields,
 				image: { url: item.images && item.images.length === 1 ? item.images[0] : null },
-				footer: { text: item.colorCustom ? 'This item is color-custom' : null }
+				footer: {
+					text: item.colorCustom ?
+						`This item is color-custom to your ${item.colorCustom.join(', ')} color`
+						: null
+				}
 			}
 		});
 	},
