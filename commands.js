@@ -214,7 +214,6 @@ exports.commands = {
 				...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
 				...isCosmetic ? [] : [`**Resists:** ${formatBoosts(item.resists)}`],
 			];
-			const embedFields = [];
 			for (const special of item.specials || []) {
 				embedFields.push({
 					name: 'Weapon Special',
@@ -238,15 +237,14 @@ exports.commands = {
 				...item.modifies ? [`**Modifies:**: ${item.modifies}`]: []
 			];
 	
-			const fields = [];
-			if (item.skill) fields.push({
+			if (item.skill) embedFields.push({
 				name: 'Trinket Skill',
 				value: [
 					`\n**Effect:** ${item.skill.effect}`,
 					`**Mana Cost:** ${item.skill.manaCost}`,
 					`**Cooldown:** ${item.skill.cooldown}`,
 					`**Damage Type:** ${capitalize(item.skill.damageType || 'N/A')}`,
-					`**Element:** ${(item.skill.element || []).map(elem => capitalize(elem)).join(' / ')}`
+					`**Element:** ${(item.skill.elements || []).map(elem => capitalize(elem)).join(' / ')}`
 				],
 				inline: true,
 			});
