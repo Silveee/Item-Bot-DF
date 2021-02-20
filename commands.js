@@ -403,7 +403,7 @@ exports.commands = {
 					items: { $addToSet: { title: '$doc.title', level: '$doc.level', tags: '$doc.tags' } }
 				}
 			},
-			{ $sort: { newField: sortOrder } },
+			{ $sort: { newField: sortOrder, level: -1 } },
 			{ $limit: 10 }
 		];
 		const results = items.aggregate(pipeline);
@@ -413,7 +413,7 @@ exports.commands = {
 		let index = 0;
 		while ((itemGroup = (await results.next())) !== null) {
 			if (index > 1)
-				itemGroup.items = itemGroup.items.filter(item => !item.tags.includes('rare'));
+				itemGroup.items = itemGroup.items.filter(item => !(item.tags || []).includes('rare'));
 			if (!itemGroup.items.length) continue;
 
 			const items = itemGroup.items.map(item => {
