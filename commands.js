@@ -220,8 +220,8 @@ exports.commands = {
 					value: [
 						`**Activation:** ${capitalize(special.activation)}`,
 						`**Effect:** ${special.effect}`,
-						...special.elements ? [] : [`**Element:** ${special.elements.map(capitalize).join(' / ')}`],
-						...!(special.activation in { 'specific enemy': 1, 'click weapon': 1 }) ?
+						...special.elements ? [`**Element:** ${special.elements.map(capitalize).join(' / ')}`] : [],
+						...special.activation in { 'specific enemy': 1, 'click weapon': 1 } ?
 							[] : [`**Rate:** ${special.rate * 100}%`],
 					].join('\n'),
 					inline: true
@@ -255,6 +255,9 @@ exports.commands = {
 				name: 'Images',
 				value: item.images.map((imageLink, index) => `[Appearance ${index + 1}](${imageLink})`).join(', ')
 			});
+		else if (item.images && item.images.length === 1 && item.images[0].includes('imgur')) {
+			description.push(`[Appearance](${item.images[0]})`);
+		}
 
 		channel.send({ embed:
 			{
