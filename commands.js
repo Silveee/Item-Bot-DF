@@ -304,7 +304,7 @@ exports.commands = {
 			.map(arg => arg.trim().toLowerCase()) || [];
 		if (!itemType || !sortExp)
 			return channel.send(embed(
-				`Usage: ${CT}sort\`item type\`, \`attribute to sort by\`, \`max level (optional)\\n` +
+				`Usage: ${CT}sort\`item type\`, \`attribute to sort by\`, \`max level (optional)\`\n` +
 				`\`item type\` - Valid types are: _${[...validTypes].join(', ')}_. ` +
 				"Abbreviations such as 'acc' and 'wep' also work.\n" +
 				'`attribute to sort by` can be any stat bonus or resistance ' +
@@ -404,7 +404,7 @@ exports.commands = {
 				}
 			},
 			{ $sort: { newField: sortOrder, level: -1 } },
-			{ $limit: 10 }
+			{ $limit: 7 }
 		];
 		const results = items.aggregate(pipeline);
 
