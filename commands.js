@@ -238,7 +238,8 @@ exports.commands = {
 						`**Effect:** ${special.effect}`,
 						...special.elements ? [`**Element:** ${special.elements.map(capitalize).join(' / ')}`] : [],
 						...special.activation in { 'specific enemy': 1, 'click weapon': 1 } ?
-							[] : [`**Rate:** ${special.rate * 100}%`],
+							// Precision of 5 decimal places
+							[] : [`**Rate:** ${Math.round(special.rate * 10**5) / 10**3}%`],
 					].join('\n'),
 					inline: true
 				});
@@ -260,7 +261,7 @@ exports.commands = {
 					`**Mana Cost:** ${item.skill.manaCost}`,
 					`**Cooldown:** ${item.skill.cooldown}`,
 					`**Damage Type:** ${capitalize(item.skill.damageType || 'N/A')}`,
-					`**Element:** ${(item.skill.elements || []).map(elem => capitalize(elem)).join(' / ')}`
+					`**Element:** ${(item.skill.element || []).map(elem => capitalize(elem)).join(' / ') || 'N/A'}`
 				],
 				inline: true,
 			});
