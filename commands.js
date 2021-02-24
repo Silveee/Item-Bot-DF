@@ -269,8 +269,11 @@ exports.commands = {
 
 		if (item.images && item.images.length > 1)
 			embedFields.push({
-				name: 'Images',
-				value: item.images.map((imageLink, index) => `[Appearance ${index + 1}](${imageLink})`).join(', ')
+				name: 'Other Appearances',
+				value: item.images
+					.slice(1)
+					.map((imageLink, index) => `[Appearance ${index + 2}](${imageLink})`)
+					.join(', ')
 			});
 		// else if (item.images && item.images.length === 1 && item.images[0].includes('imgur')) {
 		// 	description.push(`[Appearance](${item.images[0]})`);
@@ -282,7 +285,7 @@ exports.commands = {
 				url: item.link,
 				description: description.join('\n'),
 				fields: embedFields,
-				image: { url: item.images && item.images.length === 1 ? item.images[0] : null },
+				image: { url: item.images ? item.images[0] : null },
 				footer: {
 					text: item.colorCustom ?
 						`This item is color-custom to your ${item.colorCustom.join(', ')} color`
