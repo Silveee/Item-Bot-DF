@@ -272,9 +272,9 @@ exports.commands = {
 				name: 'Images',
 				value: item.images.map((imageLink, index) => `[Appearance ${index + 1}](${imageLink})`).join(', ')
 			});
-		else if (item.images && item.images.length === 1 && item.images[0].includes('imgur')) {
-			description.push(`[Appearance](${item.images[0]})`);
-		}
+		// else if (item.images && item.images.length === 1 && item.images[0].includes('imgur')) {
+		// 	description.push(`[Appearance](${item.images[0]})`);
+		// }
 
 		channel.send({ embed:
 			{
