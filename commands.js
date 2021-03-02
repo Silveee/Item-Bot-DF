@@ -39,6 +39,7 @@ const aliases = {
 	'lh': 'lucky hammer',
 	'dm cannon': 'defender cannon',
 	'isis': 'ice scythe',
+	'your mom': 'unsqueakable farce'
 };
 const validTypes = new Set([
 	'weapon', 'accessory', 'cape', 'wing', 'helm',
