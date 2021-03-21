@@ -63,7 +63,7 @@ const bonuses = new Set([
  */
 function capitalize(text) {
 	const fullCapWords = new Set([ // These words are fully capitalized
-		'str', 'int', 'dex', 'luk', 'cha',
+		'str', 'int', 'dex', 'luk', 'cha', 'dm', 'fs',
 		'wis', 'end', 'dm', 'so', 'dc', 'da', 'ak'
 	]);
 	if (fullCapWords.has(text)) return text.toUpperCase();
@@ -90,7 +90,9 @@ function formatTag(tag) {
 	return {
 		'se': 'Seasonal',
 		'ak': 'ArchKnight Saga',
-		'alexander': 'Alexander Saga'
+		'alexander': 'Alexander Saga',
+		'temp': 'Temporary',
+		'fs': 'Free Storage'
 	}[tag] || capitalize(tag);
 }
 
@@ -411,7 +413,7 @@ exports.commands = {
 				}
 			},
 			{ $sort: { newField: sortOrder, level: -1 } },
-			{ $limit: 7 }
+			{ $limit: 8 }
 		];
 		const results = items.aggregate(pipeline);
 
