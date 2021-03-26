@@ -39,7 +39,12 @@ const aliases = {
 	'lh': 'lucky hammer',
 	'dm cannon': 'defender cannon',
 	'isis': 'ice scythe',
-	'your mom': 'unsqueakable farce'
+	'drgn claw': 'drgn c74w',
+	'drgn capacitor': 'drgn c4p4c170r',
+	'drgn visor': 'drgn v1z0r',
+	'drgn vizor': 'drgn v1z0r',
+	'your mom': 'unsqueakable farce',
+	'ur mom': 'unsqueakable farce',
 };
 const validTypes = new Set([
 	'weapon', 'accessory', 'cape', 'wing', 'helm',
@@ -176,7 +181,7 @@ async function getItem(itemName, existingQuery) {
 				priority: {
 					$switch: {
 						branches: [
-							{ case: { $in: ['temporary', { $ifNull: ['$tags', []] }] }, then: -3 },
+							{ case: { $in: ['temp', { $ifNull: ['$tags', []] }] }, then: -3 },
 							{ case: { $in: ['so', { $ifNull: ['$tags', []] }] }, then: -2 },
 							{ case: { $in: ['dc', { $ifNull: ['$tags', []] }] }, then: -1 },
 						],
@@ -332,6 +337,7 @@ exports.commands = {
 		// "accessorie" because the trailing s would have been removed
 		else if (itemType === 'acc' || itemType === 'accessorie') itemType = 'accessory';
 		else if (itemType === 'helmet') itemType = 'helm';
+		else if (itemType === 'wing') itemType = 'cape';
 		if (!validTypes.has(itemType)) {
 			return channel.send(embed(
 				`"${itemType}" is not a valid item type. Valid types are: _${[...validTypes].join(', ')}_. ` +
@@ -349,13 +355,8 @@ exports.commands = {
 
 		const filter = { newField: { $exists: true, $ne: 0 } };
 		if (!isNaN(maxLevel)) filter.level = { $lte: maxLevel };
-		if (itemType === 'weapon') {
-			filter.tags = { $ne: 'temporary' };
-			filter.damage = { $lt: 125 }; // Default weapons of certain classes. Ignore these
-		}
-		else if (itemType in { 'cape':1, 'wings':1 }) filter.type = { $in: ['cape', 'wings'] };
-		// Temporary until all accessories with type 'helmet' are converted to 'helm'
-		else if (itemType === 'helm') filter.type = { $in: ['helm', 'helmet'] };
+		if (itemType === 'weapon') filter.tags = { $ne: 'default' };
+		else if (itemType === 'cape') filter.type = { $in: ['cape', 'wings'] };
 		else if (itemType !== 'accessory') filter.type = itemType;
 
 		// sort in descending order by default, but sort in ascending order if the sorting
