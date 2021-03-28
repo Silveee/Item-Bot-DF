@@ -355,11 +355,14 @@ exports.commands = {
 		let items = null;
 		items = await db.collection(process.env.DB_COLLECTION);
 
-		const filter = { newField: { $exists: true, $ne: 0 } };
-		if (!isNaN(maxLevel)) filter.level = { $lte: maxLevel };
-		if (itemType === 'weapon') filter.tags = { $ne: 'default' };
-		else if (itemType === 'cape') filter.type = { $in: ['cape', 'wings'] };
-		else if (itemType !== 'accessory') filter.type = itemType;
+		const filter = {
+			newField: { $exists: true, $ne: 0 },
+			category: itemType === 'weapon' ? 'weapon' : 'accessory',
+			...!isNaN(maxLevel) && { level: { $lte: maxLevel } },
+			$nor: [{ tags: 'default' }, { tags: { $all: ['temp', 'rare'] } }]
+		};
+		if (itemType === 'cape') filter.type = { $in: ['cape', 'wings'] };
+		else if (!(itemType in { 'accessory': 1, 'weapon': 1 })) filter.type = itemType;
 
 		// sort in descending order by default, but sort in ascending order if the sorting
 		// expression starts with a - sign
