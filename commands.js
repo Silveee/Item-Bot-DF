@@ -318,9 +318,11 @@ exports.commands = {
 			.map(arg => arg.trim().toLowerCase()) || [];
 		if (!itemType || !sortExp)
 			return channel.send(embed(
-				`Usage: ${CT}sort\`item type\`, \`attribute to sort by\`, \`max level (optional)\`\n` +
+				`Usage: ${CT}sort \`item type\`, \`attribute to sort by\`, \`max level (optional)\`\n` +
 				`\`item type\` - Valid types are: _${[...validTypes].join(', ')}_. ` +
 				"Abbreviations such as 'acc' and 'wep' also work.\n" +
+				'If you are searching for a weapon, you may prefix the `item type` with an element ' +
+				'to only get results for weapons of that element\n' +
 				'`attribute to sort by` can be any stat bonus or resistance ' +
 				'_(eg. STR, Melee Def, Bonus, All, Ice, Health etc.)_, or in the case of weapons, _damage_. ' +
 				'Add a - sign at the beginning of the `attribute` to sort in ascending order.'
@@ -333,7 +335,10 @@ exports.commands = {
 		if (maxLevel < 0 || maxLevel > 90) {
 			return channel.send(embed(`The max level should be between 0 and 90 inclusive. ${maxLevel} is not valid.`));
 		}
+		let sections = itemType.split(' ');
+		[itemType] = sections.slice(-1);
 		if (itemType.slice(-1) === 's') itemType = itemType.slice(0, -1); // strip trailing s
+		const itemElement = sections.slice(0, -1).join(' ').trim();
 
 		if (itemType === 'wep') itemType = 'weapon';
 		// "accessorie" because the trailing s would have been removed
@@ -363,6 +368,8 @@ exports.commands = {
 		};
 		if (itemType === 'cape') filter.type = { $in: ['cape', 'wings'] };
 		else if (!(itemType in { 'accessory': 1, 'weapon': 1 })) filter.type = itemType;
+
+		if (itemElement) filter.elements = itemElement;
 
 		// sort in descending order by default, but sort in ascending order if the sorting
 		// expression starts with a - sign
@@ -444,6 +451,7 @@ exports.commands = {
 		if (itemType === 'accessory') formattedItemType = 'accessories';
 		else formattedItemType = itemType.slice(-1) === 's' ? itemType : itemType + 's';
 		formattedItemType = capitalize(formattedItemType);
+		if (itemElement) formattedItemType = capitalize(itemElement) + ' ' + formattedItemType;
 
 		channel.send(embed(sorted.trim(), `Sort ${formattedItemType} by ${capitalize(originalExp)}`))
 			.catch(() => channel.send('An error occured'));
