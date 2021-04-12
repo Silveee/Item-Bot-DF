@@ -7,7 +7,7 @@ const commands = require('./commands').commands;
 
 bot.on('message', async message => {
 	if (
-		!(message.channel.type in { 'text': 1, 'dm': 1 }) ||
+		!(message.channel.type in { 'text': 1 }) ||
 		!message.content.startsWith(process.env.COMMAND_TOKEN) ||
 		message.author.bot
 	) return;
