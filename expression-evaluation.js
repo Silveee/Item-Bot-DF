@@ -31,8 +31,15 @@ class TooManyOperatorsInExpressionError extends ProblematicExpressionError {
 	}
 }
 
+class MultipleOfSameOperandInExpressionError extends ProblematicExpressionError {
+	constructor() {
+		super('Your sort expression cannot use the same operand more than once.');
+	}
+}
+
 function tokenizeExpression(expression) {
 	const tokenizedExpression = [];
+	const usedOperands = new Set();
 	let operatorCount = 0;
 
 	for (let i = 0; i < expression.length; ++i) {
@@ -55,6 +62,9 @@ function tokenizeExpression(expression) {
 				i += 1;
 			}
 			i -= 1;
+			operand = operand.trim();
+			if (usedOperands.has(operand)) throw new MultipleOfSameOperandInExpressionError();
+			usedOperands.add(operand);
 			tokenizedExpression.push(operand.trim());
 		}
 		else throw new InvalidTokenInExpressionError(`'${token}' is an invalid sort expression character.`);
