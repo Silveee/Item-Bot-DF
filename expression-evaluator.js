@@ -17,11 +17,14 @@ class TooManyOperatorsInExpressionError extends Error {
 	}
 }
 
-// class TooManyBracketLevels extends Error {
-// 	constructor() {
-// 		super(`Your sort expression has too many redundant layers of parentheses in it.`);
-// 	}
-// }
+function isResist(value) {
+	const bonuses = new Set([
+		'block', 'dodge', 'parry', 'crit', 'magic def', 'pierce def', 'melee def',
+		'wis', 'end', 'cha', 'luk', 'int', 'dex', 'str', 'bonus'
+	]);
+	if (bonuses.has(value) || value === 'damage') return false;
+	return true;
+}
 
 /**
  * Capitalizes the first letter of every other word in the input text, with
@@ -134,9 +137,7 @@ function infixToPostfix(expression) {
 	while (operatorStack.length) {
 		const operator = operatorStack.pop();
 		if (operator in { '(': 1, ')': 1 }) {
-			throw new InvalidExpressionError(
-				'This sort expression is invalid. Make sure your parentheses are balanced correctly.'
-			);
+			throw new InvalidExpressionError('Make sure your parentheses are balanced correctly.');
 		}
 		result.push(operator);
 	}
@@ -161,7 +162,7 @@ function prettifyExpression(postfixExpression) {
 				operandStack.push(`(${previousOperand} ${token} ${topOperand})`);
 			}
 		} else {
-			operandStack.push(capitalize(token));
+			operandStack.push(capitalize(isResist(token) ? `${token} res` : token));
 		}
 	}
 	let result = operandStack.pop(); // There should only be 1 element
