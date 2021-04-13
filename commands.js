@@ -1,8 +1,10 @@
 'use strict';
 
-const connect = require('./db');
+const { bonuses, capitalize, formatTag, formatBoosts, sanitizeText, validTypes } = require('./utils');
 
-const CT = process.env.COMMAND_TOKEN;
+const connect = require('./db');
+const { ExpressionParser, ProblematicExpressionError } = require('./expression-evaluation');
+
 const aliases = {
 	'nsod': 'necrotic sword of doom',
 	'boa': 'blade of awe',
@@ -46,111 +48,8 @@ const aliases = {
 	'your mom': 'unsqueakable farce',
 	'ur mom': 'unsqueakable farce',
 };
-const validTypes = new Set([
-	'weapon', 'accessory', 'cape', 'wing', 'helm',
-	'ring', 'belt', 'necklace', 'trinket', 'bracer'
-]);
-const bonuses = new Set([
-	'block', 'dodge', 'parry', 'crit', 'magic def', 'pierce def', 'melee def',
-	'wis', 'end', 'cha', 'luk', 'int', 'dex', 'str', 'bonus'
-]);
 
-/**
- * Capitalizes the first letter of every other word in the input text, with
- * few exceptions, which are instead capitalized fully.
- *
- * @param {String} text
- *   Text to be capitalized
- *
- * @return {String}
- *   String with alternate words in the input text capitalized, or the text
- *   fully capitalized if the text is one of several values
- */
-function capitalize(text) {
-	const fullCapWords = new Set([ // These words are fully capitalized
-		'str', 'int', 'dex', 'luk', 'cha', 'dm', 'fs',
-		'wis', 'end', 'dm', 'so', 'dc', 'da', 'ak'
-	]);
-	if (fullCapWords.has(text)) return text.toUpperCase();
-
-	if (!text || !text.trim()) return text;
-
-	return text
-		.trim()
-		.split(' ')
-		.map(word => word[0].toUpperCase() + word.slice(1)).join(' ');
-}
-
-/**
- * Format an input tag
- *
- * @param {String} tag
- *   Tag to be formatted
- *
- * @return {String}
- *   'Seasonal', 'ArchKnight Saga', 'Alexander Saga' if the input tag is 'se', 'ak', or 'alexander'
- *   respectively. The return value is capitalize(tag) otherwise
- */
-function formatTag(tag) {
-	return {
-		'se': 'Seasonal',
-		'ak': 'ArchKnight Saga',
-		'alexander': 'Alexander Saga',
-		'temp': 'Temporary',
-		'fs': 'Free Storage'
-	}[tag] || capitalize(tag);
-}
-
-/**
- * Does the following:
- * - Lowercases input text
- * - Removes leading and trailing whitespace
- * - Removes accents from input text characters
- * - Removes brackets, quotes, and backticks
- * - Replaces all other alphanumeric characters with a single whitespace
- * - Replaces all instances of more than one whitespace with a single whitespace
- * Example: "Alina's Battle-Bouquet Staff" -> "alinas battle bouquet staff"
- *
- * @param {String} text
- *   Input text to be sanitized
- *
- * @return {String}
- *   Sanitized text
- */
-function sanitizeText(text) {
-	return text.toLowerCase()
-		// Replace accented characters with their non-accented versions
-		.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-		.replace(/[()'"“”‘’`]/g, '') // Remove brackets, quotes, and backticks
-		// Replace all other non-alphanumeric character (other than |)
-		// sequences with a single whitespace
-		.replace(/[^a-z0-9|]+/g, ' ')
-		.trim();
-}
-
-/**
- * Formats an array of boosts (resistances or stat bonuses) into a comma-separated list
- * Example: [{ k: 'int', v: 3 }, { k: 'melee def', v: -1 }] -> 'INT +3, Melee Def -1'
- * 
- * @param {{ k: String, v: Number }[] | null} boosts
- *   An array of objects listing each boost's name (k) and value (v)
- *
- * @return {String}
- *   A comma separated list of boost names and their corresponding values, obtained by:
- *   - Capitalizing each boost name
- *   - Prepending a '+' to the boost's value if it is > 0
- *   - Joining boost's name and value together with a space
- *   - Joining each string of boost name/value pairs with ', '
- */
-function formatBoosts(boosts) {
-	return (boosts || [])
-		.map(boost => {
-			const name = capitalize(boost.k);
-			const value = (boost.v < 0 ? '' : '+') + boost.v;
-			return name + ' ' + value;
-		})
-		.join(', ') || 'None';
-}
+const CT = process.env.COMMAND_TOKEN;
 
 /**
  * Get details of an item from the database. The input item name is sanitized and converted to its original form
@@ -305,11 +204,16 @@ exports.commands = {
 		});
 	},
 
-	sort: async function ({ channel }, args) {
-		const embed = (text, title) => { 
+	sortascending: 'sort',
+	sortdescending: 'sort',
+	sortasc: 'sort',
+	sortdesc: 'sort',
+	sort: async function ({ channel }, args, commandName) {
+		const embed = (text, title, footer) => {
 			const body = {};
 			body.description = text;
 			if (title) body.title = title;
+			if (footer) body.footer = { text: footer };
 			return { embed: body };
 		};
 
@@ -317,28 +221,38 @@ exports.commands = {
 			.split(',')
 			.map(arg => arg.trim().toLowerCase()) || [];
 		if (!itemType || !sortExp)
-			return channel.send(embed(
-				`Usage: ${CT}sort \`item type\`, \`attribute to sort by\`, \`max level (optional)\`\n` +
+			return await channel.send(embed(
+				`Usage: ${CT}${commandName} \`item type\`, \`sort expression\`, \`max level (optional)\`\n` +
 				`\`item type\` - Valid types are: _${[...validTypes].join(', ')}_. ` +
 				"Abbreviations such as 'acc' and 'wep' also work.\n" +
 				'If you are searching for a weapon, you may prefix the `item type` with an element ' +
 				'to only get results for weapons of that element\n' +
-				'`attribute to sort by` can be any stat bonus or resistance ' +
-				'_(eg. STR, Melee Def, Bonus, All, Ice, Health etc.)_, or in the case of weapons, _damage_. ' +
-				'Add a - sign at the beginning of the `attribute` to sort in ascending order.'
+				'`sort expression` can either be a single value or multiple values joined together by ' +
+				'+ and/or - signs and/or brackets (). These "values" can be any stat bonus or resistance ' +
+				'_(eg. STR, Melee Def, Bonus, All, Ice, Health, etc.)_, or in the case of weapons, _Damage_. ' +
+				'Examples: _All + Health_, _-Health_, _INT - (DEX + STR)_, etc.\n' +
+				`\`${CT}sort\` sorts in descending order. Use \`${CT}sortasc\` to sort in ascending order instead.`
 			));
 		if (maxLevel && maxLevel.match(/[^\-0-9]/)) {
-			return channel.send(embed(`"${maxLevel}" is not a valid number.`));
+			return await channel.send(embed(`"${maxLevel}" is not a valid number.`));
+		}
+		if (sortExp.length > 100) {
+			return await channel.send(embed('Your sort expression cannot be longer than 100 characters.'));
 		}
 
 		maxLevel = Number(maxLevel);
 		if (maxLevel < 0 || maxLevel > 90) {
-			return channel.send(embed(`The max level should be between 0 and 90 inclusive. ${maxLevel} is not valid.`));
+			return await channel.send(
+				embed(`The max level should be between 0 and 90 inclusive. ${maxLevel} is not valid.`)
+			);
 		}
 		let sections = itemType.split(' ');
 		[itemType] = sections.slice(-1);
 		if (itemType.slice(-1) === 's') itemType = itemType.slice(0, -1); // strip trailing s
 		const itemElement = sections.slice(0, -1).join(' ').trim();
+		if (itemElement.length > 10) {
+			return await channel.send(embed('That element name is too long.'));
+		}
 
 		if (itemType === 'wep') itemType = 'weapon';
 		// "accessorie" because the trailing s would have been removed
@@ -351,10 +265,6 @@ exports.commands = {
 				'"acc" and "wep" are valid abbreviations for accessories and weapons.'
 			));
 		}
-
-		sortExp = sortExp.trim().toLowerCase();
-		// Ignore search query if it contains an invalid character
-		if (sortExp.match(/[^\-0-9a-z? ]/)) return channel.send(embed('No results were found.'));
 
 		const db = await connect();
 		let items = null;
@@ -371,36 +281,19 @@ exports.commands = {
 
 		if (itemElement) filter.elements = itemElement;
 
-		// sort in descending order by default, but sort in ascending order if the sorting
-		// expression starts with a - sign
-		let sortOrder = -1;
-		if (sortExp[0] === '-') {
-			sortExp = sortExp.slice(1).trim();
-			sortOrder = 1;
+		const sortOrder = commandName in { 'sortasc': 1, 'sortascending': 1 } ? 1 : -1;
+
+		let expressionParser;
+		try {
+			expressionParser = new ExpressionParser(sortExp);
+		} catch (err) {
+			if (err instanceof ProblematicExpressionError) {
+				return await channel.send(embed(err.message));
+			}
+			throw err;
 		}
-		// The expression before prepending anything to it
-		const originalExp = sortExp;
+		const mongoSortExp = expressionParser.mongoExpression();
 
-		if (bonuses.has(sortExp)) sortExp = 'bonuses.' + sortExp;
-		else if (sortExp !== 'damage') sortExp = 'resists.' + sortExp;
-
-		/* Keeps lower level items but removes items with the same name or pedia url
-		   within the same group. This block of code might be needed later. */
-		// const pipeline = [
-		// 	{ $addFields: { damage: { $avg: '$damage' }, bonuses: { $arrayToObject: '$bonuses' }, resists: { $arrayToObject: '$resists' } } },
-		// 	{ $addFields: { newField: '$' + sortExp } },
-		// 	{ $match: filter },
-
-		// 	{ $sort: { level: -1 } },
-		// 	// Remove documents that have the same name and newly added field value, keep only max level version
-		// 	{ $group: { _id: { newField: '$newField', name: '$name' }, doc: { $first: '$$CURRENT' } } },
-		// 	// Remove documents that have the same pedia url and newly added field value
-		// 	{ $group: { _id: { newField: '$doc.newField', link: '$doc.link' }, doc: { $first: '$doc' } } },
-		// 	// Place all items with the same new field value into the same group
-		// 	{ $group: { _id: '$doc.newField', newField: { $first: '$doc.newField' }, items: { $addToSet: { title: '$doc.title', level: '$doc.level', tags: '$doc.tags' } } } },
-		// 	{ $sort: { newField: sortOrder } },
-		// 	{ $limit: 10 }
-		// ];
 		const pipeline = [
 			{
 				$addFields: {
@@ -409,7 +302,7 @@ exports.commands = {
 					resists: { $arrayToObject: '$resists' }
 				}
 			},
-			{ $addFields: { newField: '$' + sortExp } },
+			{ $addFields: { newField: mongoSortExp } },
 			{ $match: filter },
 			{ $sort: { newField: sortOrder, level: -1 } },
 			// Remove documents that share the same pedia URL, only keep the max level version
@@ -453,7 +346,13 @@ exports.commands = {
 		formattedItemType = capitalize(formattedItemType);
 		if (itemElement) formattedItemType = capitalize(itemElement) + ' ' + formattedItemType;
 
-		channel.send(embed(sorted.trim(), `Sort ${formattedItemType} by ${capitalize(originalExp)}`))
-			.catch(() => channel.send('An error occured'));
+		const displayExpression = expressionParser.prettifyExpression();
+		channel.send(
+			embed(
+				sorted.trim(),
+				`Sort ${formattedItemType} by ${displayExpression}`,
+				!isNaN(maxLevel) && maxLevel < 90 ? `Level capped at ${maxLevel} in results` : null
+			)
+		).catch(() => channel.send('An error occured'));
 	},
 };
