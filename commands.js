@@ -3,6 +3,7 @@
 const { bonuses, capitalize, formatTag, formatBoosts, sanitizeText, validTypes } = require('./utils');
 
 const connect = require('./db');
+const { ExpressionParser, ProblematicExpressionError } = require('./expression-evaluation');
 
 const aliases = {
 	'nsod': 'necrotic sword of doom',
@@ -203,11 +204,16 @@ exports.commands = {
 		});
 	},
 
-	sort: async function ({ channel }, args) {
-		const embed = (text, title) => { 
+	sortascending: 'sort',
+	sortdescending: 'sort',
+	sortasc: 'sort',
+	sortdesc: 'sort',
+	sort: async function ({ channel }, args, commandName) {
+		const embed = (text, title, footer) => {
 			const body = {};
 			body.description = text;
 			if (title) body.title = title;
+			if (footer) body.footer = { text: footer };
 			return { embed: body };
 		};
 
@@ -215,28 +221,38 @@ exports.commands = {
 			.split(',')
 			.map(arg => arg.trim().toLowerCase()) || [];
 		if (!itemType || !sortExp)
-			return channel.send(embed(
-				`Usage: ${CT}sort \`item type\`, \`attribute to sort by\`, \`max level (optional)\`\n` +
+			return await channel.send(embed(
+				`Usage: ${CT}${commandName} \`item type\`, \`sort expression\`, \`max level (optional)\`\n` +
 				`\`item type\` - Valid types are: _${[...validTypes].join(', ')}_. ` +
 				"Abbreviations such as 'acc' and 'wep' also work.\n" +
 				'If you are searching for a weapon, you may prefix the `item type` with an element ' +
 				'to only get results for weapons of that element\n' +
-				'`attribute to sort by` can be any stat bonus or resistance ' +
-				'_(eg. STR, Melee Def, Bonus, All, Ice, Health etc.)_, or in the case of weapons, _damage_. ' +
-				'Add a - sign at the beginning of the `attribute` to sort in ascending order.'
+				'`sort expression` can either be a single value or multiple values joined together by ' +
+				'+ and/or - signs and/or brackets (). These "values" can be any stat bonus or resistance ' +
+				'_(eg. STR, Melee Def, Bonus, All, Ice, Health, etc.)_, or in the case of weapons, _Damage_. ' +
+				'Examples: _All + Health_, _-Health_, _INT - (DEX + STR)_, etc.\n' +
+				`\`${CT}sort\` sorts in descending order. Use \`${CT}sortasc\` to sort in ascending order instead.`
 			));
 		if (maxLevel && maxLevel.match(/[^\-0-9]/)) {
-			return channel.send(embed(`"${maxLevel}" is not a valid number.`));
+			return await channel.send(embed(`"${maxLevel}" is not a valid number.`));
+		}
+		if (sortExp.length > 100) {
+			return await channel.send(embed('Your sort expression cannot be longer than 100 characters.'));
 		}
 
 		maxLevel = Number(maxLevel);
 		if (maxLevel < 0 || maxLevel > 90) {
-			return channel.send(embed(`The max level should be between 0 and 90 inclusive. ${maxLevel} is not valid.`));
+			return await channel.send(
+				embed(`The max level should be between 0 and 90 inclusive. ${maxLevel} is not valid.`)
+			);
 		}
 		let sections = itemType.split(' ');
 		[itemType] = sections.slice(-1);
 		if (itemType.slice(-1) === 's') itemType = itemType.slice(0, -1); // strip trailing s
 		const itemElement = sections.slice(0, -1).join(' ').trim();
+		if (itemElement.length > 10) {
+			return await channel.send(embed('That element name is too long.'));
+		}
 
 		if (itemType === 'wep') itemType = 'weapon';
 		// "accessorie" because the trailing s would have been removed
@@ -249,10 +265,6 @@ exports.commands = {
 				'"acc" and "wep" are valid abbreviations for accessories and weapons.'
 			));
 		}
-
-		sortExp = sortExp.trim().toLowerCase();
-		// Ignore search query if it contains an invalid character
-		if (sortExp.match(/[^\-0-9a-z? ]/)) return channel.send(embed('No results were found.'));
 
 		const db = await connect();
 		let items = null;
@@ -269,18 +281,19 @@ exports.commands = {
 
 		if (itemElement) filter.elements = itemElement;
 
-		// sort in descending order by default, but sort in ascending order if the sorting
-		// expression starts with a - sign
-		let sortOrder = -1;
-		if (sortExp[0] === '-') {
-			sortExp = sortExp.slice(1).trim();
-			sortOrder = 1;
-		}
-		// The expression before prepending anything to it
-		const originalExp = sortExp;
+		const sortOrder = commandName in { 'sortasc': 1, 'sortascending': 1 } ? 1 : -1;
 
-		if (bonuses.has(sortExp)) sortExp = 'bonuses.' + sortExp;
-		else if (sortExp !== 'damage') sortExp = 'resists.' + sortExp;
+		let expressionParser, mongoSortExp, displayExpression;
+		try {
+			expressionParser = new ExpressionParser(sortExp);
+			mongoSortExp = expressionParser.mongoExpression();
+			displayExpression = expressionParser.prettifyExpression();
+		} catch (err) {
+			if (err instanceof ProblematicExpressionError) {
+				return await channel.send(embed(err.message));
+			}
+			throw err;
+		}
 
 		const pipeline = [
 			{
@@ -290,7 +303,7 @@ exports.commands = {
 					resists: { $arrayToObject: '$resists' }
 				}
 			},
-			{ $addFields: { newField: '$' + sortExp } },
+			{ $addFields: { newField: mongoSortExp } },
 			{ $match: filter },
 			{ $sort: { newField: sortOrder, level: -1 } },
 			// Remove documents that share the same pedia URL, only keep the max level version
@@ -334,7 +347,12 @@ exports.commands = {
 		formattedItemType = capitalize(formattedItemType);
 		if (itemElement) formattedItemType = capitalize(itemElement) + ' ' + formattedItemType;
 
-		channel.send(embed(sorted.trim(), `Sort ${formattedItemType} by ${capitalize(originalExp)}`))
-			.catch(() => channel.send('An error occured'));
+		channel.send(
+			embed(
+				sorted.trim(),
+				`Sort ${formattedItemType} by ${displayExpression}`,
+				!isNaN(maxLevel) && maxLevel < 90 ? `Level capped at ${maxLevel} in results` : null
+			)
+		).catch(() => channel.send('An error occured'));
 	},
 };

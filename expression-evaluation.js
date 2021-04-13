@@ -41,7 +41,7 @@ function tokenizeExpression(expression) {
 
 		if (token in OPERATORS) {
 			operatorCount += 1;
-			if (operatorCount >= MAX_OPERATORS) throw new TooManyOperatorsInExpressionError();
+			if (operatorCount > MAX_OPERATORS) throw new TooManyOperatorsInExpressionError();
 
 			tokenizedExpression.push(token);
 		}
@@ -134,8 +134,8 @@ function infixToPostfix(tokenizedExpression) {
 
 class ExpressionParser {
 	constructor(expression) {
-		this.baseExpression = expression;
-		this.tokenizedExpression = tokenizeExpression(expression);
+		this.baseExpression = expression.trim();
+		this.tokenizedExpression = tokenizeExpression(this.baseExpression);
 		this.postfixExpression = infixToPostfix(this.tokenizedExpression);
 	}
 
