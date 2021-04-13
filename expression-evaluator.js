@@ -117,7 +117,12 @@ function infixToPostfix(expression) {
 
 		} else if (token in OPERATORS) {
 			// Operator is a unary operator if the previous token was either an open bracket or another operator
-			const modifiedToken = [TokenTypes.OPEN, TokenTypes.OPERATOR].includes(lastTokenType) ? 'u' + token : token;
+			const modifiedToken = [
+				TokenTypes.OPEN,
+				TokenTypes.OPERATOR,
+				null
+			].includes(lastTokenType) ? 'u' + token : token;
+
 			if (modifiedToken === 'u+') continue; // Unary + is redundant
 
 			const priority = OPERATORS[modifiedToken];
