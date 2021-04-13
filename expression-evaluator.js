@@ -1,7 +1,16 @@
 'use strict';
 
 const MAX_OPERATORS = 5;
-const OPERATORS = { '+': 1, '-': 1, 'u-': 2 }; // u- and u+ are unary - and + respectively
+const OPERATORS = {
+	'+': { precedence: 1, unary: false, mongoFunc: '$add' },
+	'-': { precedence: 1, unary: false, mongoFunc: '$subtract' },
+	'u-': { precedence: 2, unary: true, mongoFunc: '$subtract' }
+};
+
+const bonuses = new Set([
+	'block', 'dodge', 'parry', 'crit', 'magic def', 'pierce def', 'melee def',
+	'wis', 'end', 'cha', 'luk', 'int', 'dex', 'str', 'bonus'
+]);
 
 class InvalidTokenInExpressionError extends Error {}
 
@@ -18,10 +27,6 @@ class TooManyOperatorsInExpressionError extends Error {
 }
 
 function isResist(value) {
-	const bonuses = new Set([
-		'block', 'dodge', 'parry', 'crit', 'magic def', 'pierce def', 'melee def',
-		'wis', 'end', 'cha', 'luk', 'int', 'dex', 'str', 'bonus'
-	]);
 	if (bonuses.has(value) || value === 'damage') return false;
 	return true;
 }
@@ -162,7 +167,7 @@ function prettifyExpression(postfixExpression) {
 			let topOperand = operandStack.pop();
 
 			// Handle unary operators
-			if (token[0] === 'u') {
+			if (OPERATORS[token].unary) {
 				operandStack.push(`(${token[1]}${topOperand})`);
 			}
 			// Handle binary operators
@@ -179,4 +184,30 @@ function prettifyExpression(postfixExpression) {
 	if (result[0] === '(' && result[result.length - 1] === ')') result = result.slice(1, -1);
 
 	return result;
+}
+
+function toMongoExpression(postfixExpression) {
+	const mongoExpression = [];
+	for (const token of postfixExpression) {
+		if (token in OPERATORS) {
+			const operator = OPERATORS[token];
+			let topOperand = mongoExpression.pop();
+
+			// Handle unary operators
+			if (operator.unary) {
+				mongoExpression.push({ [operator.mongoFunc]: [0, topOperand]});
+			}
+			// Handle binary operators
+			else {
+				const previousOperand = mongoExpression.pop();
+				mongoExpression.push({ [operator.mongoFunc]: [previousOperand, topOperand] });
+			}
+		} else {
+			if (token === 'damage') mongoExpression.push('$' + token);
+			else if (bonuses.has(token)) mongoExpression.push('$bonuses.' + token);
+			else mongoExpression.push('$resists.' + token);
+		}
+	}
+
+	return mongoExpression.pop();
 }
