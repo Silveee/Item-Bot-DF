@@ -23,6 +23,32 @@ class TooManyOperatorsInExpressionError extends Error {
 // 	}
 // }
 
+/**
+ * Capitalizes the first letter of every other word in the input text, with
+ * few exceptions, which are instead capitalized fully
+ *
+ * @param {String} text
+ *   Text to be capitalized
+ *
+ * @return {String}
+ *   String with alternate words in the input text capitalized, or the text
+ *   fully capitalized if the text is one of several values
+ */
+function capitalize(text) {
+	const fullCapWords = new Set([ // These words are fully capitalized
+		'str', 'int', 'dex', 'luk', 'cha', 'dm', 'fs',
+		'wis', 'end', 'dm', 'so', 'dc', 'da', 'ak'
+	]);
+	if (fullCapWords.has(text)) return text.toUpperCase();
+
+	if (!text || !text.trim()) return text;
+
+	return text
+		.trim()
+		.split(' ')
+		.map(word => word[0].toUpperCase() + word.slice(1)).join(' ');
+}
+
 function tokenizeExpression(expression) {
 	const tokenizedExpression = [];
 	let operatorCount = 0;
@@ -89,7 +115,7 @@ function infixToPostfix(expression) {
 			const priority = OPERATORS[modifiedToken];
 			let [top] = operatorStack.slice(-1);
 			// Pop all operators with higher precedence than current
-			while (top && top in OPERATORS && priority < OPERATORS[top]) {
+			while (top && top in OPERATORS && priority <= OPERATORS[top]) {
 				result.push(operatorStack.pop());
 				[top] = operatorStack.slice(-1);
 			}
@@ -114,6 +140,32 @@ function infixToPostfix(expression) {
 		}
 		result.push(operator);
 	}
+
+	return result;
+}
+
+function prettifyExpression(postfixExpression) {
+	const operandStack = [];
+	for (const token of postfixExpression) {
+		if (token in OPERATORS) {
+			let topOperand = operandStack.pop();
+
+			// Handle unary operators
+			if (token[0] === 'u') {
+				operandStack.push(`(${token[1]}${topOperand})`);
+			}
+			// Handle binary operators
+			else {
+				const previousOperand = operandStack.pop();
+
+				operandStack.push(`(${previousOperand} ${token} ${topOperand})`);
+			}
+		} else {
+			operandStack.push(capitalize(token));
+		}
+	}
+	let result = operandStack.pop(); // There should only be 1 element
+	if (result[0] === '(' && result[result.length - 1] === ')') result = result.slice(1, -1);
 
 	return result;
 }
