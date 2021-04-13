@@ -9,15 +9,23 @@ const OPERATORS = {
 	'u-': { precedence: 2, unary: true, mongoFunc: '$subtract' }
 };
 
-class InvalidTokenInExpressionError extends Error {}
-
-class InvalidExpressionError extends Error {
+class ProblematicExpressionError extends Error {
 	constructor(message) {
-		super(`Your sort expression is invalid. ${message}`);
+		super(message);
+		this.name = this.constructor.name;
 	}
 }
 
-class TooManyOperatorsInExpressionError extends Error {
+class InvalidTokenInExpressionError extends ProblematicExpressionError {}
+
+class InvalidExpressionError extends ProblematicExpressionError {
+	constructor(message='') {
+		if (message) message = ' ' + message;
+		super(`Your sort expression is invalid.${message}`);
+	}
+}
+
+class TooManyOperatorsInExpressionError extends ProblematicExpressionError {
 	constructor() {
 		super(`Your sort expression cannot have more than ${MAX_OPERATORS} operators in it.`);
 	}
@@ -54,11 +62,9 @@ function tokenizeExpression(expression) {
 	return tokenizedExpression;
 }
 
-exports.infixToPostfix = expression => {
-	const tokenizedExpression = tokenizeExpression(expression);
+function infixToPostfix(tokenizedExpression) {
 	const operatorStack = [];
 	const result = [];
-
 	const TokenTypes = { OPEN: 0, CLOSE: 1, OPERATOR: 2, OPERAND: 3 };
 
 	let lastTokenType = null;
@@ -124,56 +130,66 @@ exports.infixToPostfix = expression => {
 	}
 
 	return result;
-};
+}
 
-exports.prettifyExpression = postfixExpression => {
-	const operandStack = [];
-	for (const token of postfixExpression) {
-		if (token in OPERATORS) {
-			let topOperand = operandStack.pop();
-
-			// Handle unary operators
-			if (OPERATORS[token].unary) {
-				operandStack.push(`(${token[1]}${topOperand})`);
-			}
-			// Handle binary operators
-			else {
-				const previousOperand = operandStack.pop();
-
-				operandStack.push(`(${previousOperand} ${token} ${topOperand})`);
-			}
-		} else {
-			operandStack.push(capitalize(isResist(token) ? `${token} res` : token));
-		}
-	}
-	let result = operandStack.pop(); // There should only be 1 element
-	if (result[0] === '(' && result[result.length - 1] === ')') result = result.slice(1, -1);
-
-	return result;
-};
-
-exports.toMongoExpression = postfixExpression => {
-	const mongoExpression = [];
-	for (const token of postfixExpression) {
-		if (token in OPERATORS) {
-			const operator = OPERATORS[token];
-			let topOperand = mongoExpression.pop();
-
-			// Handle unary operators
-			if (operator.unary) {
-				mongoExpression.push({ [operator.mongoFunc]: [0, topOperand]});
-			}
-			// Handle binary operators
-			else {
-				const previousOperand = mongoExpression.pop();
-				mongoExpression.push({ [operator.mongoFunc]: [previousOperand, topOperand] });
-			}
-		} else {
-			if (token === 'damage') mongoExpression.push('$' + token);
-			else if (bonuses.has(token)) mongoExpression.push('$bonuses.' + token);
-			else mongoExpression.push('$resists.' + token);
-		}
+class ExpressionParser {
+	constructor(expression) {
+		this.baseExpression = expression;
+		this.tokenizedExpression = tokenizeExpression(expression);
+		this.postfixExpression = infixToPostfix(this.tokenizedExpression);
 	}
 
-	return mongoExpression.pop();
-};
+	prettifyExpression() {
+		const operandStack = [];
+		for (const token of this.postfixExpression) {
+			if (token in OPERATORS) {
+				let topOperand = operandStack.pop();
+	
+				// Handle unary operators
+				if (OPERATORS[token].unary) {
+					operandStack.push(`(${token[1]}${topOperand})`);
+				}
+				// Handle binary operators
+				else {
+					const previousOperand = operandStack.pop();
+	
+					operandStack.push(`(${previousOperand} ${token} ${topOperand})`);
+				}
+			} else {
+				operandStack.push(capitalize(isResist(token) ? `${token} res` : token));
+			}
+		}
+		let result = operandStack.pop(); // There should only be 1 element
+		if (result[0] === '(' && result[result.length - 1] === ')') result = result.slice(1, -1);
+	
+		return result;
+	}
+
+	mongoExpression() {
+		const mongoExpression = [];
+		for (const token of this.postfixExpression) {
+			if (token in OPERATORS) {
+				const operator = OPERATORS[token];
+				let topOperand = mongoExpression.pop();
+	
+				// Handle unary operators
+				if (operator.unary) {
+					mongoExpression.push({ [operator.mongoFunc]: [0, topOperand]});
+				}
+				// Handle binary operators
+				else {
+					const previousOperand = mongoExpression.pop();
+					mongoExpression.push({ [operator.mongoFunc]: [previousOperand, topOperand] });
+				}
+			} else {
+				if (token === 'damage') mongoExpression.push('$' + token);
+				else if (bonuses.has(token)) mongoExpression.push('$bonuses.' + token);
+				else mongoExpression.push('$resists.' + token);
+			}
+		}
+	
+		return mongoExpression.pop();
+	}	
+}
+
+module.exports = { ExpressionParser, ProblematicExpressionError };
