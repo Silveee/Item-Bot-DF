@@ -54,7 +54,7 @@ function tokenizeExpression(expression) {
 	return tokenizedExpression;
 }
 
-function infixToPostfix(expression) {
+exports.infixToPostfix = expression => {
 	const tokenizedExpression = tokenizeExpression(expression);
 	const operatorStack = [];
 	const result = [];
@@ -124,9 +124,9 @@ function infixToPostfix(expression) {
 	}
 
 	return result;
-}
+};
 
-function prettifyExpression(postfixExpression) {
+exports.prettifyExpression = postfixExpression => {
 	const operandStack = [];
 	for (const token of postfixExpression) {
 		if (token in OPERATORS) {
@@ -150,9 +150,9 @@ function prettifyExpression(postfixExpression) {
 	if (result[0] === '(' && result[result.length - 1] === ')') result = result.slice(1, -1);
 
 	return result;
-}
+};
 
-function toMongoExpression(postfixExpression) {
+exports.toMongoExpression = postfixExpression => {
 	const mongoExpression = [];
 	for (const token of postfixExpression) {
 		if (token in OPERATORS) {
@@ -176,4 +176,4 @@ function toMongoExpression(postfixExpression) {
 	}
 
 	return mongoExpression.pop();
-}
+};
