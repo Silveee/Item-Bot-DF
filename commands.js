@@ -283,17 +283,16 @@ exports.commands = {
 
 		const sortOrder = commandName in { 'sortasc': 1, 'sortascending': 1 } ? 1 : -1;
 
-		let expressionParser, mongoSortExp, displayExpression;
+		let expressionParser;
 		try {
 			expressionParser = new ExpressionParser(sortExp);
-			mongoSortExp = expressionParser.mongoExpression();
-			displayExpression = expressionParser.prettifyExpression();
 		} catch (err) {
 			if (err instanceof ProblematicExpressionError) {
 				return await channel.send(embed(err.message));
 			}
 			throw err;
 		}
+		const mongoSortExp = expressionParser.mongoExpression();
 
 		const pipeline = [
 			{
@@ -347,6 +346,7 @@ exports.commands = {
 		formattedItemType = capitalize(formattedItemType);
 		if (itemElement) formattedItemType = capitalize(itemElement) + ' ' + formattedItemType;
 
+		const displayExpression = expressionParser.prettifyExpression();
 		channel.send(
 			embed(
 				sorted.trim(),

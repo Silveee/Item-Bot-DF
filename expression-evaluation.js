@@ -73,6 +73,9 @@ function infixToPostfix(tokenizedExpression) {
 			if (lastTokenType === TokenTypes.CLOSE) {
 				throw new InvalidExpressionError('You cannot have an open bracket right after a close bracket.');
 			}
+			if (lastTokenType === TokenTypes.OPERAND) {
+				throw new InvalidExpressionError('You cannot have an open bracket right after an operand.');
+			}
 			operatorStack.push(token);
 			lastTokenType = TokenTypes.OPEN;
 
@@ -105,7 +108,7 @@ function infixToPostfix(tokenizedExpression) {
 			const priority = OPERATORS[modifiedToken];
 			let [top] = operatorStack.slice(-1);
 			// Pop all operators with higher precedence than current
-			while (top && top in OPERATORS && priority <= OPERATORS[top]) {
+			while (top && top in OPERATORS && priority <= OPERATORS[top].precedence) {
 				result.push(operatorStack.pop());
 				[top] = operatorStack.slice(-1);
 			}
