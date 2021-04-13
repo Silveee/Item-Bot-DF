@@ -1,7 +1,7 @@
 'use strict';
 
 const MAX_OPERATORS = 5;
-const OPERATORS = { '+': 1, '-': 1, 'u-': 2, 'u+': 2 };
+const OPERATORS = { '+': 1, '-': 1, 'u-': 2 }; // u- and u+ are unary - and + respectively
 
 class InvalidTokenInExpressionError extends Error {}
 
@@ -103,6 +103,9 @@ function infixToPostfix(expression) {
 			if (lastTokenType === TokenTypes.OPERATOR) {
 				throw new InvalidExpressionError('You cannot have a close bracket right after an operator.');
 			}
+			if (lastTokenType === TokenTypes.OPEN) {
+				throw new InvalidExpressionError('Bracket pairs cannot be empty.');
+			}
 
 			// Move all tokens until the last '(' into the result
 			while (operatorStack.length > 0 && operatorStack[operatorStack.length - 1] !== '(') {
@@ -115,6 +118,8 @@ function infixToPostfix(expression) {
 		} else if (token in OPERATORS) {
 			// Operator is a unary operator if the previous token was either an open bracket or another operator
 			const modifiedToken = [TokenTypes.OPEN, TokenTypes.OPERATOR].includes(lastTokenType) ? 'u' + token : token;
+			if (modifiedToken === 'u+') continue; // Unary + is redundant
+
 			const priority = OPERATORS[modifiedToken];
 			let [top] = operatorStack.slice(-1);
 			// Pop all operators with higher precedence than current
