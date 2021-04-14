@@ -133,6 +133,9 @@ function infixToPostfix(tokenizedExpression) {
 			result.push(token);
 		}
 	}
+	if (lastTokenType === TokenTypes.OPERATOR) {
+		throw new InvalidExpressionError('You cannot end an expression with an operator.');
+	}
 
 	while (operatorStack.length) {
 		const operator = operatorStack.pop();
