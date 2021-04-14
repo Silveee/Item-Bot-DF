@@ -37,6 +37,24 @@ class MultipleOfSameOperandInExpressionError extends ProblematicExpressionError 
 	}
 }
 
+function unaliasOperand(operand) {
+	const aliases = {
+		'dmg': 'damage',
+		'immo': 'immobility',
+		'melee': 'melee def',
+		'melee defence': 'melee def',
+		'melee defense': 'melee def',
+		'magic': 'magic def',
+		'magic defence': 'magic def',
+		'magic defense': 'magic def',
+		'pierce': 'pierce def',
+		'pierce defence': 'pierce def',
+		'pierce defense': 'pierce def',
+	};
+
+	return aliases[operand] || operand;
+}
+
 function tokenizeExpression(expression) {
 	const tokenizedExpression = [];
 	const usedOperands = new Set();
@@ -62,7 +80,7 @@ function tokenizeExpression(expression) {
 				i += 1;
 			}
 			i -= 1;
-			operand = operand.trim();
+			operand = unaliasOperand(operand.trim());
 			if (usedOperands.has(operand)) throw new MultipleOfSameOperandInExpressionError();
 			usedOperands.add(operand);
 			tokenizedExpression.push(operand.trim());
