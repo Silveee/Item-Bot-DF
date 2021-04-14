@@ -115,7 +115,7 @@ function infixToPostfix(tokenizedExpression) {
 
 			if (modifiedToken === 'u+') continue; // Unary + is redundant
 
-			const priority = OPERATORS[modifiedToken];
+			const priority = OPERATORS[modifiedToken].precedence;
 			let [top] = operatorStack.slice(-1);
 			// Pop all operators with higher precedence than current
 			while (top && top in OPERATORS && priority <= OPERATORS[top].precedence) {
@@ -172,7 +172,10 @@ class ExpressionParser {
 					operandStack.push(`(${previousOperand} ${token} ${topOperand})`);
 				}
 			} else {
-				operandStack.push(capitalize(isResist(token) ? `${token} res` : token));
+				let field = token;
+				if (token === 'damage') field = 'avg damage';
+				else if (isResist(token)) field = `${token} res`;
+				operandStack.push(capitalize(field));
 			}
 		}
 		let result = operandStack.pop(); // There should only be 1 element
