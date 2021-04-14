@@ -198,12 +198,15 @@ class ExpressionParser {
 					mongoExpression.push({ [operator.mongoFunc]: [previousOperand, topOperand] });
 				}
 			} else {
-				if (token === 'damage') mongoExpression.push('$' + token);
-				else if (bonuses.has(token)) mongoExpression.push('$bonuses.' + token);
-				else mongoExpression.push('$resists.' + token);
+				let field = token;
+				if (token === 'damage') field = '$' + field;
+				else if (bonuses.has(token)) field = '$bonuses.' + field;
+				else field = '$resists.' + field;
+
+				mongoExpression.push({ $ifNull: [field, 0] });
 			}
 		}
-	
+
 		return mongoExpression.pop();
 	}	
 }
