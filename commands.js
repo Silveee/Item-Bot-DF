@@ -77,22 +77,24 @@ async function getItem(itemName, existingQuery) {
 
 	const pipeline = [
 		{ $match: existingQuery },
-		// Temporary items are to be at the bottom of the search, followed by special offer and DC items
+		{ $sort: { level: -1 } },
+		// Temporary items are given least priority, followed by special offer, DC, and then rare items
 		{
 			$addFields: {
 				priority: {
 					$switch: {
 						branches: [
-							{ case: { $in: ['temp', { $ifNull: ['$tags', []] }] }, then: -3 },
-							{ case: { $in: ['so', { $ifNull: ['$tags', []] }] }, then: -2 },
-							{ case: { $in: ['dc', { $ifNull: ['$tags', []] }] }, then: -1 },
+							{ case: { $in: ['temp', { $ifNull: ['$tags', []] }] }, then: -4 },
+							{ case: { $in: ['so', { $ifNull: ['$tags', []] }] }, then: -3 },
+							{ case: { $in: ['dc', { $ifNull: ['$tags', []] }] }, then: -2 },
+							{ case: { $in: ['rare', { $ifNull: ['$tags', []] }] }, then: -1 },
 						],
 						default: 0
 					}
 				}
 			}
 		},
-		{ $sort: { level: -1, priority: -1 } },
+		{ $sort: { priority: -1, level: -1 } },
 		{ $limit: 1 }
 	];
 	let results = items.aggregate(pipeline);
