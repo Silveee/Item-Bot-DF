@@ -115,6 +115,14 @@ exports.commands = {
 	weapon: 'item',
 	acc: 'item',
 	accessory: 'item',
+	belt: 'item',
+	cape: 'item',
+	helm: 'item',
+	helmet: 'item',
+	necklace: 'item',
+	ring: 'item',
+	trinket: 'item',
+	bracer: 'item',
 	item: async function ({ channel }, args, commandName) {
 		const [itemName, maxLevel] = args.split('/');
 		if (!itemName.trim() || (maxLevel && isNaN(maxLevel))) {
@@ -124,7 +132,13 @@ exports.commands = {
 		const query = {};
 		if (maxLevel) query.level = { $lte: Number(maxLevel) };
 		if (commandName in { 'wep': 1, 'weap': 1, 'weapon': 1 }) query.category = 'weapon';
-		else if (commandName in { 'acc': 1, 'accessory': 1 }) query.category = 'accessory';
+		else {
+			query.category = 'accessory';
+			if (!(commandName in { 'acc': 1, 'accessory': 1 })) query.type = commandName;
+
+			if (query.type === 'helmet') query.type = 'helm';
+			else if (query.type === 'cape') query.type = { $in: ['cape', 'wings'] };
+		}
 
 		const item = await getItem(itemName, query);
 		if (!item) return channel.send('No item was found');
