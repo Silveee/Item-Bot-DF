@@ -77,7 +77,6 @@ async function getItem(itemName, existingQuery) {
 
 	const pipeline = [
 		{ $match: existingQuery },
-		{ $sort: { level: -1 } },
 		// Temporary items are given least priority, followed by special offer, DC, and then rare items
 		{
 			$addFields: {
@@ -91,10 +90,11 @@ async function getItem(itemName, existingQuery) {
 						],
 						default: 0
 					}
-				}
+				},
+				sum: { $sum: '$bonuses.v' }
 			}
 		},
-		{ $sort: { priority: -1, level: -1 } },
+		{ $sort: { priority: -1, level: -1, sum: -1 } },
 		{ $limit: 1 }
 	];
 	let results = items.aggregate(pipeline);
