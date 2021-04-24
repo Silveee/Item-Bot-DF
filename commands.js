@@ -13,6 +13,7 @@ const aliases = {
 	'ba': 'baltaels aventail',
 	'boa': 'blade of awe',
 	'bod': 'blade of destiny',
+	'bsw': 'baltaels aventail',
 	'c7': 'the corrupted seven',
 	'ddb': 'defenders dragon belt',
 	'ddn': 'defenders dragon necklace',
@@ -20,7 +21,6 @@ const aliases = {
 	'ddsoe': 'doomed dragon amulet scythe of elementals',
 	'ddv': 'distorted doom visage',
 	'dm cannon': 'defender cannon',
-	'doomed': 'doomed dragon amulet scythe of elementals',
 	'drgn capacitor': 'drgn c4p4c170r',
 	'drgn claw': 'drgn c74w',
 	'drgn visor': 'drgn v1z0r',
@@ -38,8 +38,6 @@ const aliases = {
 	'nstb': 'not so tiny bubbles',
 	'pdl': 'dragons patience',
 	'rdl': 'dragons rage',
-	'ricterild': 'summon gem ricterild ex',
-	'roktoru': 'summon gem roktoru ex',
 	'scc': 'sea chickens conquest',
 	'sf': 'soulforged scythe',
 	'ublod': 'ultimate blinding light of destiny',
@@ -47,6 +45,7 @@ const aliases = {
 	'uok': 'ultra omniknight blade',
 	'ur mom': 'unsqueakable farce',
 	'vik': 'vanilla ice katana',
+	'vile rose': 'vile infused rose dagger',
 	'your mom': 'unsqueakable farce'
 };
 
