@@ -1,6 +1,6 @@
 'use strict';
 
-const { bonuses, capitalize, isResist } = require('./utils');
+const { capitalize, isResist } = require('./utils');
 
 const MAX_OPERATORS = 5;
 const OPERATORS = {
@@ -221,7 +221,7 @@ class ExpressionParser {
 			} else {
 				let field = token;
 				if (token === 'damage') field = '$' + field;
-				else if (bonuses.has(token)) field = '$bonuses.' + field;
+				else if (!isResist(token)) field = '$bonuses.' + field;
 				else field = '$resists.' + field;
 
 				mongoExpression.push({ $ifNull: [field, 0] });

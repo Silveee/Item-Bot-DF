@@ -1,6 +1,6 @@
 'use strict';
 
-const bonuses = exports.bonuses = new Set([
+const bonuses = new Set([
 	'block', 'dodge', 'parry', 'crit', 'magic def', 'pierce def', 'melee def',
 	'wis', 'end', 'cha', 'luk', 'int', 'dex', 'str', 'bonus'
 ]);
