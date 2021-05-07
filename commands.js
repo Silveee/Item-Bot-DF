@@ -120,6 +120,7 @@ exports.commands = {
 	wand: 'item',
 	dagger: 'item',
 	scythe: 'item',
+	acc: 'item',
 	accessory: 'item',
 	belt: 'item',
 	cape: 'item',
