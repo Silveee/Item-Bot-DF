@@ -11,6 +11,7 @@ const aliases = {
 	'ancient': 'ancient dragon amulet scythe of the elements',
 	'aya': 'summon gem ayauhnqui ex',
 	'ba': 'baltaels aventail',
+	'blod': 'blinding light of destiny',
 	'boa': 'blade of awe',
 	'bod': 'blade of destiny',
 	'bsw': 'baltaels aventail',
@@ -173,17 +174,19 @@ exports.commands = {
 			query.level = { [mongoOperatorMapping[operator]]: levelFilter };
 		}
 
-		query.category = 'weapon';
-		if (commandName in { 'sword': 1, 'mace': 1, 'axe': 1 }) query.type = { $in: ['sword', 'mace', 'axe'] };
-		else if (commandName in { 'staff': 1, 'wand': 1 }) query.type = { $in: ['staff', 'wand'] };
-		else if (commandName in { 'dagger': 1, 'scythe': 1 }) query.type = commandName;
+		if (commandName !== 'item') {
+			query.category = 'weapon';
+			if (commandName in { 'sword': 1, 'mace': 1, 'axe': 1 }) query.type = { $in: ['sword', 'mace', 'axe'] };
+			else if (commandName in { 'staff': 1, 'wand': 1 }) query.type = { $in: ['staff', 'wand'] };
+			else if (commandName in { 'dagger': 1, 'scythe': 1 }) query.type = commandName;
 
-		else if (!(commandName in { 'wep': 1, 'weap': 1, 'weapon': 1 })) {
-			query.category = 'accessory';
+			else if (!(commandName in { 'wep': 1, 'weap': 1, 'weapon': 1 })) {
+				query.category = 'accessory';
 
-			if (commandName === 'helmet') query.type = 'helm';
-			else if (commandName in { 'cape': 1, 'wings': 1, 'wing': 1 }) query.type = { $in: ['cape', 'wings'] };
-			else if (!(commandName in { 'acc': 1, 'accessory': 1 })) query.type = commandName;
+				if (commandName === 'helmet') query.type = 'helm';
+				else if (commandName in { 'cape': 1, 'wings': 1, 'wing': 1 }) query.type = { $in: ['cape', 'wings'] };
+				else if (!(commandName in { 'acc': 1, 'accessory': 1 })) query.type = commandName;
+			}
 		}
 
 		const item = await getItem(itemName, query);
