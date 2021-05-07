@@ -1,6 +1,6 @@
 'use strict';
 
-const { capitalize, formatTag, formatBoosts, sanitizeText, validTypes } = require('./utils');
+const { capitalize, embed, formatTag, formatBoosts, sanitizeText, validTypes } = require('./utils');
 
 const connect = require('./db');
 const { ExpressionParser, ProblematicExpressionError } = require('./expression-evaluation');
@@ -130,14 +130,48 @@ exports.commands = {
 	ring: 'item',
 	trinket: 'item',
 	bracer: 'item',
-	item: async function ({ channel }, args, commandName) {
-		const [itemName, maxLevel] = args.split('/');
-		if (!itemName.trim() || (maxLevel && isNaN(maxLevel))) {
-			return channel.send(`Usage: ${CT}${commandName} \`[name]\` / \`[max level (optional)]\``);
+	item: async function ({ channel }, input, commandName) {
+		if (!input) {
+			return channel.send(embed(
+				`Usage: ${CT}${commandName} \`[name]\` - Fetches the details of an item\n` +
+				'_or_' +
+				`${CT}${commandName} \`[name]\` \`(operator)\` \`level\` - Fetches the details of an item ` +
+				'and filters based on `level`\n' +
+				'`level` should be between 0 and 90 and `operator` must be one of the following: ' +
+				'`=`, `<`, `>`, `<=`, `>=`, `!= or =/=`'
+			));
 		}
 
 		const query = {};
-		if (maxLevel) query.level = { $lte: Number(maxLevel) };
+
+		const mongoOperatorMapping = {
+			'=': '$eq', '==': '$eq', '===': '$eq',
+			'<': '$lt', '>': '$gt',
+			'<=': '$lte', '/': '$lte', '=<': '$lte',
+			'>=': '$gte', '=>': '$gte',
+			'!=': '$ne', '=/=': '$ne'
+		};
+		const operators = Object.keys(mongoOperatorMapping).sort((a, b) => b.length - a.length);
+		const opRegexp = new RegExp(operators.map(op => `(?:${op})`).join('|'));
+		const opMatch = input.match(opRegexp);
+
+		let itemName = input;
+		if (opMatch) {
+			const operator = opMatch ? opMatch[0] : null;
+			itemName = input.slice(0, opMatch.index).trim();
+			let levelFilter = input.slice(opMatch.index + operator.length).trim();
+
+			if (!levelFilter || isNaN(levelFilter)) {
+				return channel.send(embed('Either the operator you used or the number you entered is invalid.'));
+			}
+
+			levelFilter = Number(levelFilter);
+			if (levelFilter < 0 || levelFilter > 90) {
+				return channel.send(embed('The `level` filter must be between 0 and 90.'));
+			}
+
+			query.level = { [mongoOperatorMapping[operator]]: levelFilter };
+		}
 
 		query.category = 'weapon';
 		if (commandName in { 'sword': 1, 'mace': 1, 'axe': 1 }) query.type = { $in: ['sword', 'mace', 'axe'] };
@@ -238,14 +272,6 @@ exports.commands = {
 	sortasc: 'sort',
 	sortdesc: 'sort',
 	sort: async function ({ channel }, args, commandName) {
-		const embed = (text, title, footer) => {
-			const body = {};
-			body.description = text;
-			if (title) body.title = title;
-			if (footer) body.footer = { text: footer };
-			return { embed: body };
-		};
-
 		let [itemType, sortExp, maxLevel] = args
 			.split(',')
 			.map(arg => arg.trim().toLowerCase()) || [];
