@@ -112,10 +112,18 @@ exports.commands = {
 	wep: 'item',
 	weap: 'item',
 	weapon: 'item',
-	acc: 'item',
+	sword: 'item',
+	axe: 'item',
+	mace: 'item',
+	staff: 'item',
+	wand: 'item',
+	dagger: 'item',
+	scythe: 'item',
 	accessory: 'item',
 	belt: 'item',
 	cape: 'item',
+	wings: 'item',
+	wing: 'item',
 	helm: 'item',
 	helmet: 'item',
 	necklace: 'item',
@@ -130,13 +138,18 @@ exports.commands = {
 
 		const query = {};
 		if (maxLevel) query.level = { $lte: Number(maxLevel) };
-		if (commandName in { 'wep': 1, 'weap': 1, 'weapon': 1 }) query.category = 'weapon';
-		else {
-			query.category = 'accessory';
-			if (!(commandName in { 'acc': 1, 'accessory': 1 })) query.type = commandName;
 
-			if (query.type === 'helmet') query.type = 'helm';
-			else if (query.type === 'cape') query.type = { $in: ['cape', 'wings'] };
+		query.category = 'weapon';
+		if (commandName in { 'sword': 1, 'mace': 1, 'axe': 1 }) query.type = { $in: ['sword', 'mace', 'axe'] };
+		else if (commandName in { 'staff': 1, 'wand': 1 }) query.type = { $in: ['sword', 'mace', 'axe'] };
+		else if (commandName in { 'dagger': 1, 'scythe': 1 }) query.type = commandName;
+
+		else if (!(commandName in { 'wep': 1, 'weap': 1, 'weapon': 1 })) {
+			query.category = 'accessory';
+
+			if (commandName === 'helmet') query.type = 'helm';
+			else if (commandName in { 'cape': 1, 'wings': 1, 'wing': 1 }) query.type = { $in: ['cape', 'wings'] };
+			else if (!(commandName in { 'acc': 1, 'accessory': 1 })) query.type = commandName;
 		}
 
 		const item = await getItem(itemName, query);
@@ -325,7 +338,7 @@ exports.commands = {
 			{ $group: { _id: { link: '$link' }, doc: { $first: '$$CURRENT' } } },
 			// Remove documents that share the same item name
 			{ $group: { _id: { name: '$doc.name' }, doc: { $first: '$doc' } } },
-			// Group documents 
+			// Group documents
 			{
 				$group: {
 					_id: '$doc.newField', newField: { $first: '$doc.newField' }, 
