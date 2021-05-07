@@ -10,6 +10,14 @@ exports.validTypes = new Set([
 	'ring', 'belt', 'necklace', 'trinket', 'bracer'
 ]);
 
+exports.embed = (text, title, footer) => {
+	const body = {};
+	body.description = text;
+	if (title) body.title = title;
+	if (footer) body.footer = { text: footer };
+	return { embed: body };
+};
+
 exports.isResist = value => {
 	if (bonuses.has(value) || value === 'damage') return false;
 	return true;
