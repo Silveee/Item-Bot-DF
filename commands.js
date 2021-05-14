@@ -94,7 +94,17 @@ async function getItem(itemName, existingQuery) {
 				sum: { $sum: '$bonuses.v' }
 			}
 		},
-		{ $sort: { priority: -1, level: -1, sum: -1 } },
+		{ $sort: { priority: -1 } },
+		{
+			$group: {
+				_id: { title: '$title', link: '$link', level: '$level', bonuses: '$bonuses', resists: '$resists' },
+				doc: { $first: '$$CURRENT' },
+				tags: { $push: { $ifNull: ['$tags', []] } },
+				priority: { $max: '$priority' }
+			}
+		},
+		{ $replaceRoot: { newRoot: { $mergeObjects: ['$doc', { tags: '$tags', priority: '$priority' }] } } },
+		{ $sort: { level: -1, sum: -1, priority: -1 } },
 		{ $limit: 1 }
 	];
 	let results = items.aggregate(pipeline);
@@ -195,10 +205,16 @@ exports.commands = {
 
 		const embedFields = [];
 		let description = null;
+
 		const isCosmetic = item.tags && item.tags.includes('cosmetic');
+		const tags = item.tags
+			.map(tagList =>	
+				tagList.map(formatTag).join(', ') || 'None'
+			)
+			.join(' __or__ ');
 		if (item.category === 'weapon') {
 			description = [
-				`**Tags:** ${(item.tags || []).map(formatTag).join(', ') || 'None'}`,
+				`**Tags:** ${tags}`,
 				`**Level:** ${item.level}`,
 				`**Type:** ${item.type.map(capitalize).join(' / ')}`,
 				...isCosmetic ? [] : [`**Damage:** ${item.damage.map(String).join('-') || 'Scaled'}`],
@@ -222,7 +238,7 @@ exports.commands = {
 			}
 		} else if (item.category === 'accessory') {
 			description = [
-				`**Tags:** ${(item.tags || []).map(formatTag).join(', ') || 'None'}`,
+				`**Tags:** ${tags}`,
 				`**Level:** ${item.level}`,
 				`**Type:** ${capitalize(item.type)}`,
 				...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
