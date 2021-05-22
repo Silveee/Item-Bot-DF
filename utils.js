@@ -90,9 +90,10 @@ exports.sanitizeText = text => {
 		// Replace accented characters with their non-accented versions
 		.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 		.replace(/[()'"“”‘’`]/g, '') // Remove brackets, quotes, and backticks
-		// Replace all other non-alphanumeric character (other than |)
+		// Replace all other non-alphanumeric character (other than |, since that is a valid weapon name)
 		// sequences with a single whitespace
 		.replace(/[^a-z0-9|]+/g, ' ')
+		.replace(/ +/g, ' ')
 		.trim();
 };
 
