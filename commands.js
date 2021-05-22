@@ -46,7 +46,7 @@ const aliases = {
 	'uok': 'ultra omniknight blade',
 	'ur mom': 'unsqueakable farce',
 	'vik': 'vanilla ice katana',
-	'vile rose': 'vile infused rose dagger',
+	'vile rose': 'vile infused rose',
 	'your mom': 'unsqueakable farce'
 };
 
@@ -70,7 +70,8 @@ const CT = process.env.COMMAND_TOKEN;
 async function getItem(itemName, existingQuery) {
 	itemName = sanitizeText(itemName);
 	if (itemName in aliases) itemName = aliases[itemName];
-	existingQuery.name = itemName;
+	// existingQuery.name = itemName;
+	existingQuery.$text = { $search: '"' + itemName + '"' };
 
 	const db = await connect();
 	const items = await db.collection(process.env.DB_COLLECTION);
@@ -83,39 +84,28 @@ async function getItem(itemName, existingQuery) {
 				priority: {
 					$switch: {
 						branches: [
-							{ case: { $in: ['temp', { $ifNull: ['$tags', []] }] }, then: -4 },
-							{ case: { $in: ['so', { $ifNull: ['$tags', []] }] }, then: -3 },
-							{ case: { $in: ['dc', { $ifNull: ['$tags', []] }] }, then: -2 },
-							{ case: { $in: ['rare', { $ifNull: ['$tags', []] }] }, then: -1 },
+							{ case: { $in: ['temp', '$tagSet.tags'] }, then: -4 },
+							{ case: { $in: ['so', '$tagSet.tags'] }, then: -3 },
+							{ case: { $in: ['dc', '$tagSet.tags'] }, then: -2 },
+							{ case: { $in: ['rare', '$tagSet.tags'] }, then: -1 },
 						],
 						default: 0
 					}
 				},
-				sum: { $sum: '$bonuses.v' }
+				score: {
+					$sum: [
+						{ $sum: '$bonuses.v' },
+						{ $multiply: ['$level', { $meta: 'textScore' }] }
+					]
+				}
 			}
 		},
-		{ $sort: { priority: -1 } },
-		{
-			$group: {
-				_id: { title: '$title', link: '$link', level: '$level', bonuses: '$bonuses', resists: '$resists' },
-				doc: { $first: '$$CURRENT' },
-				tags: { $push: { $ifNull: ['$tags', []] } },
-				priority: { $max: '$priority' }
-			}
-		},
-		{ $replaceRoot: { newRoot: { $mergeObjects: ['$doc', { tags: '$tags', priority: '$priority' }] } } },
-		{ $sort: { level: -1, sum: -1, priority: -1 } },
+		{ $sort: { score: -1, priority: -1 } },
 		{ $limit: 1 }
 	];
 	let results = items.aggregate(pipeline);
 	let item = await results.next();
-	// Do a text search instead if no exact match is found
-	if (!item) {
-		delete existingQuery.name;
-		existingQuery.$text = { $search: '"' + itemName + '"' };
-		results = items.aggregate(pipeline);
-		item = await results.next();
-	}
+
 	return item;
 }
 
@@ -207,16 +197,16 @@ exports.commands = {
 		let description = null;
 
 		const isCosmetic = item.tags && item.tags.includes('cosmetic');
-		const tags = item.tags
-			.map(tagList =>	
-				tagList.map(formatTag).join(', ') || 'None'
+		const tagSet = item.tagSet
+			.map(({ tags }) =>
+				`\`${tags.map(formatTag).join(', ') || 'None'}\``
 			)
 			.join(' __or__ ');
 		if (item.category === 'weapon') {
 			description = [
-				`**Tags:** ${tags}`,
+				`**Tags:** ${tagSet}`,
 				`**Level:** ${item.level}`,
-				`**Type:** ${item.type.map(capitalize).join(' / ')}`,
+				`**Type:** ${capitalize(item.type)}`,
 				...isCosmetic ? [] : [`**Damage:** ${item.damage.map(String).join('-') || 'Scaled'}`],
 				`**Element:** ${item.elements.map(capitalize).join(' / ')}`,
 				...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
@@ -238,7 +228,7 @@ exports.commands = {
 			}
 		} else if (item.category === 'accessory') {
 			description = [
-				`**Tags:** ${tags}`,
+				`**Tags:** ${tagSet}`,
 				`**Level:** ${item.level}`,
 				`**Type:** ${capitalize(item.type)}`,
 				...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
