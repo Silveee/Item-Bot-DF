@@ -100,7 +100,9 @@ async function getItem(itemName, existingQuery) {
 						default: 0
 					}
 				},
-				score: {
+				bonusSum: { $sum: '$bonuses.v' },
+				textScore: { $meta: 'textScore' },
+				combinedScore: {
 					$sum: [
 						{ $sum: '$bonuses.v' },
 						{ $multiply: ['$level', { $meta: 'textScore' }] }
@@ -108,7 +110,15 @@ async function getItem(itemName, existingQuery) {
 				}
 			}
 		},
-		{ $sort: { score: -1, priority: -1 } },
+		{ $sort: { combinedScore: -1, priority: -1 } },
+		{
+			$group: {
+				_id: '$family',
+				doc: { $first: '$$CURRENT' }
+			}
+		},
+		{ $replaceRoot: { newRoot: '$doc' } },
+		{ $sort: { textScore: -1, priority: -1, level: -1, bonusSum: -1 } },
 		{ $limit: 1 }
 	];
 	let results = items.aggregate(pipeline);
