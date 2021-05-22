@@ -41,12 +41,13 @@ const aliases = {
 	'rdl': 'dragons rage',
 	'scc': 'sea chickens conquest',
 	'sf': 'soulforged scythe',
+	'udsod': 'ultimate dragonstaff of destiny',
 	'ublod': 'ultimate blinding light of destiny',
+	'utbod': 'ultimate twin blades of destiny',
 	'ultimate scythe': 'ultimate dragon amulet scythe of elementals',
 	'uok': 'ultra omniknight blade',
 	'ur mom': 'unsqueakable farce',
 	'vik': 'vanilla ice katana',
-	'vile rose': 'vile infused rose',
 	'your mom': 'unsqueakable farce'
 };
 
@@ -55,8 +56,6 @@ const CT = process.env.COMMAND_TOKEN;
 /**
  * Get details of an item from the database. The input item name is sanitized and converted to its original form
  * if it is an alias of another item name.
- * If the exact item name is not found in the database, a text search is done in descending order of level.
- * The details of the first result is then returned instead
  *
  * @param {String} itemName
  *   Name of the item to be fetched from the database
@@ -70,8 +69,17 @@ const CT = process.env.COMMAND_TOKEN;
 async function getItem(itemName, existingQuery) {
 	itemName = sanitizeText(itemName);
 	if (itemName in aliases) itemName = aliases[itemName];
-	// existingQuery.name = itemName;
-	existingQuery.$text = { $search: '"' + itemName + '"' };
+	itemName = itemName.split(' ');
+	existingQuery.$text = { $search: `${itemName.map(word => `"${word}"`).join(' ')}` };
+
+	// Check if the query contains a roman numeral
+	const romanNumberRegex = /^(?:x{0,3})(ix|iv|v?i{0,3})$/i;
+	for (const word of itemName.slice(-2).reverse()) {
+		if (word.match(romanNumberRegex)) {
+			existingQuery.name = new RegExp(`(?: ${word} )|(?: ${word}$)`, 'i');
+			break;
+		}
+	}
 
 	const db = await connect();
 	const items = await db.collection(process.env.DB_COLLECTION);
@@ -191,17 +199,16 @@ exports.commands = {
 		}
 
 		const item = await getItem(itemName, query);
-		if (!item) return channel.send('No item was found');
+		if (!item) return channel.send(embed('No item was found'));
 
 		const embedFields = [];
 		let description = null;
 
-		const isCosmetic = item.tags && item.tags.includes('cosmetic');
-		const tagSet = item.tagSet
-			.map(({ tags }) =>
-				`\`${tags.map(formatTag).join(', ') || 'None'}\``
-			)
-			.join(' __or__ ');
+		const fullTagList = item.tagSet.map(({ tags }) => tags);
+		const isCosmetic = fullTagList.flat().includes('cosmetic');
+		const tagSet = fullTagList
+			.map(tags => `\`${tags.map(formatTag).join(', ') || 'None'}\``)
+			.join(' or ');
 		if (item.category === 'weapon') {
 			description = [
 				`**Tags:** ${tagSet}`,
