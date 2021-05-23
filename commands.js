@@ -371,10 +371,15 @@ exports.commands = {
 		items = await db.collection(process.env.DB_COLLECTION);
 
 		const filter = {
-			newField: { $exists: true, $ne: 0 },
+			customSortValue: { $exists: true, $ne: 0 },
 			category: itemType === 'weapon' ? 'weapon' : 'accessory',
 			...!isNaN(maxLevel) && { level: { $lte: maxLevel } },
-			$nor: [{ tags: 'default' }, { tags: { $all: ['temp', 'rare'] } }]
+			$nor: [
+				{ 'tagSet.tags': 'ak' },
+				{ 'tagSet.tags': 'alexander' },
+				{ 'tagSet.tags': { $all: ['temp', 'default'] } },
+				{ 'tagSet.tags': { $all: ['temp', 'rare'] } }
+			]
 		};
 		if (itemType === 'cape') filter.type = { $in: ['cape', 'wings'] };
 		else if (!(itemType in { 'accessory': 1, 'weapon': 1 })) filter.type = itemType;
@@ -402,21 +407,27 @@ exports.commands = {
 					resists: { $arrayToObject: '$resists' }
 				}
 			},
-			{ $addFields: { newField: mongoSortExp } },
+			{ $addFields: { customSortValue: mongoSortExp } },
 			{ $match: filter },
-			{ $sort: { newField: sortOrder, level: -1 } },
-			// Remove documents that share the same pedia URL, only keep the max level version
-			{ $group: { _id: { link: '$link' }, doc: { $first: '$$CURRENT' } } },
-			// Remove documents that share the same item name
-			{ $group: { _id: { name: '$doc.name' }, doc: { $first: '$doc' } } },
-			// Group documents
+			{ $sort: { customSortValue: sortOrder, level: -1 } },
+			// Group documents that belong to the same family
 			{
 				$group: {
-					_id: '$doc.newField', newField: { $first: '$doc.newField' }, 
-					items: { $addToSet: { title: '$doc.title', level: '$doc.level', tags: '$doc.tags' } }
+					_id: { family: '$family' },
+					doc: { $first: '$$CURRENT' },
 				}
 			},
-			{ $sort: { newField: sortOrder, level: -1 } },
+			{ $sort: { 'doc.customSortValue': sortOrder, 'doc.level': -1 } },
+			{ $replaceRoot: { newRoot: '$doc' } },
+			// Group documents
+			{ $sort: { title: 1 } },
+			{
+				$group: {
+					_id: '$customSortValue', customSortValue: { $first: '$customSortValue' }, 
+					items: { $push: { title: '$title', level: '$level', tagSet: '$tagSet' } }
+				}
+			},
+			{ $sort: { customSortValue: sortOrder } },
 			{ $limit: 8 }
 		];
 		const results = items.aggregate(pipeline);
@@ -425,17 +436,29 @@ exports.commands = {
 		let itemGroup = null;
 		let index = 0;
 		while ((itemGroup = (await results.next())) !== null) {
-			if (index > 1)
-				itemGroup.items = itemGroup.items.filter(item => !(item.tags || []).includes('rare'));
-			if (!itemGroup.items.length) continue;
+			// Do not list items beyond the first 2 item groups whose variants are all rare
+			let items = itemGroup.items;
+			if (index > 1) items = items
+				.filter(item =>
+					item.tagSet.filter(({ tags }) => tags.includes('rare')).length !== item.tagSet.length
+				);
+			if (!items.length) continue;
 
-			const items = itemGroup.items.map(item => {
-				const tags = item.tags ? `[${item.tags.map(capitalize).join(', ')}]` : '';
-				return `${item.title} _(lv. ${item.level})_ ${tags}`.trim();
-			});
-			const message = `**${++index})** ${items.join(' / ')} **_(${itemGroup.newField})_**\n\n`;
+			items = items
+				.map(item => {
+					let tags = item.tagSet
+						.map(({ tags }) => tags.length ? tags.map(capitalize).join('+') : 'None')
+						.join(' / ');
+					tags = tags === 'None' ? '' : `[${tags}]`;
+					return `\`${item.title}\` (lv. ${item.level}) ${tags}`.trim();
+				});
+
+			const sign = itemGroup.customSortValue < 0 ? '' : '+';
+			const message = `**${sign}${itemGroup.customSortValue}** ${items.join(', ')}\n\n`;
 			if (message.length + sorted.length > 2048) break;
 			sorted += message;
+
+			index += 1;
 		}
 
 		if (!sorted) return channel.send(embed('No results were found.'));
