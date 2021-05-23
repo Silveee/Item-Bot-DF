@@ -8,7 +8,6 @@ const { ExpressionParser, ProblematicExpressionError } = require('./expression-e
 const aliases = {
 	'adl': 'ancient dragonlord helm',
 	'adsoe': 'ancient dragon amulet scythe of the elements',
-	'ancient': 'ancient dragon amulet scythe of the elements',
 	'aya': 'summon gem ayauhnqui ex',
 	'ba': 'baltaels aventail',
 	'blod': 'blinding light of destiny',
@@ -41,12 +40,14 @@ const aliases = {
 	'rdl': 'dragons rage',
 	'scc': 'sea chickens conquest',
 	'sf': 'soulforged scythe',
+	'udsod': 'ultimate dragonstaff of destiny',
 	'ublod': 'ultimate blinding light of destiny',
+	'utbod': 'ultimate twin blades of destiny',
 	'ultimate scythe': 'ultimate dragon amulet scythe of elementals',
+	'unrav': 'unraveler',
 	'uok': 'ultra omniknight blade',
 	'ur mom': 'unsqueakable farce',
 	'vik': 'vanilla ice katana',
-	'vile rose': 'vile infused rose dagger',
 	'your mom': 'unsqueakable farce'
 };
 
@@ -55,8 +56,6 @@ const CT = process.env.COMMAND_TOKEN;
 /**
  * Get details of an item from the database. The input item name is sanitized and converted to its original form
  * if it is an alias of another item name.
- * If the exact item name is not found in the database, a text search is done in descending order of level.
- * The details of the first result is then returned instead
  *
  * @param {String} itemName
  *   Name of the item to be fetched from the database
@@ -68,54 +67,81 @@ const CT = process.env.COMMAND_TOKEN;
  *   Resolves null if no item is found
  */
 async function getItem(itemName, existingQuery) {
-	itemName = sanitizeText(itemName);
-	if (itemName in aliases) itemName = aliases[itemName];
-	existingQuery.name = itemName;
+	let sanitizedName = sanitizeText(itemName);
+	if (sanitizedName in aliases) sanitizedName = aliases[sanitizedName];
+	const itemNameFragments = sanitizedName.split(' ');
+	existingQuery.$text = { $search: `${itemNameFragments.map(word => `"${word}"`).join(' ')}` };
+
+	// Check if the query contains a roman numeral
+	const romanNumberRegex = /^(?:x{0,3})(ix|iv|v?i{0,3})$/i;
+	for (const word of itemNameFragments.slice(-2).reverse()) {
+		if (word.match(romanNumberRegex)) {
+			existingQuery.name = new RegExp(`(?: ${word} )|(?: ${word}$)`, 'i');
+			break;
+		}
+	}
 
 	const db = await connect();
 	const items = await db.collection(process.env.DB_COLLECTION);
 
 	const pipeline = [
 		{ $match: existingQuery },
+		// Get tags that all variations of the item will always have
+		{
+			$addFields: {
+				guaranteedTags: {
+					$reduce: {
+						input: '$tagSet.tags',
+						initialValue: [],
+						in: {
+							$cond: [
+								{ $eq: [{ $size: '$$value' }, 0] },
+								{ $concatArrays: ['$$value', '$$this'] },
+								{ $setIntersection: ['$$value', '$$this'] },
+							]
+						}
+					}
+				}
+			}
+		},
 		// Temporary items are given least priority, followed by special offer, DC, and then rare items
 		{
 			$addFields: {
 				priority: {
-					$switch: {
-						branches: [
-							{ case: { $in: ['temp', { $ifNull: ['$tags', []] }] }, then: -4 },
-							{ case: { $in: ['so', { $ifNull: ['$tags', []] }] }, then: -3 },
-							{ case: { $in: ['dc', { $ifNull: ['$tags', []] }] }, then: -2 },
-							{ case: { $in: ['rare', { $ifNull: ['$tags', []] }] }, then: -1 },
-						],
-						default: 0
-					}
+					$sum: [
+						{ $cond: [{ $in: ['temp', '$guaranteedTags'] }, -4, 0] },
+						{ $cond: [{ $in: ['so', '$guaranteedTags'] }, -3, 0] },
+						{ $cond: [{ $in: ['dc', '$guaranteedTags'] }, -2, 0] },
+						{ $cond: [{ $in: ['rare', '$guaranteedTags'] }, -1, 0] },
+					]
 				},
-				sum: { $sum: '$bonuses.v' }
+				bonusSum: { $sum: '$bonuses.v' },
+				combinedScore: {
+					$sum: [
+						{ $sum: '$bonuses.v' },
+						{ $multiply: ['$level', { $meta: 'textScore' }] }
+					]
+				}
 			}
 		},
-		{ $sort: { priority: -1 } },
+		{ $sort: { combinedScore: -1, priority: -1 } },
 		{
 			$group: {
-				_id: { title: '$title', link: '$link', level: '$level', bonuses: '$bonuses', resists: '$resists' },
-				doc: { $first: '$$CURRENT' },
-				tags: { $push: { $ifNull: ['$tags', []] } },
-				priority: { $max: '$priority' }
+				_id: '$family',
+				doc: { $first: '$$CURRENT' }
 			}
 		},
-		{ $replaceRoot: { newRoot: { $mergeObjects: ['$doc', { tags: '$tags', priority: '$priority' }] } } },
-		{ $sort: { level: -1, sum: -1, priority: -1 } },
+		{ $replaceRoot: { newRoot: '$doc' } },
+		// Prioritize exact matches
+		{
+			$addFields: { exactMatch: { $cond: [{ $eq: ['$name', sanitizedName] }, 1, 0 ] } }
+		},
+		{ $sort: { exactMatch: -1, combinedScore: -1, priority: -1 } },
 		{ $limit: 1 }
 	];
 	let results = items.aggregate(pipeline);
 	let item = await results.next();
-	// Do a text search instead if no exact match is found
-	if (!item) {
-		delete existingQuery.name;
-		existingQuery.$text = { $search: '"' + itemName + '"' };
-		results = items.aggregate(pipeline);
-		item = await results.next();
-	}
+
 	return item;
 }
 
@@ -201,22 +227,21 @@ exports.commands = {
 		}
 
 		const item = await getItem(itemName, query);
-		if (!item) return channel.send('No item was found');
+		if (!item) return channel.send(embed('No item was found'));
 
 		const embedFields = [];
 		let description = null;
 
-		const isCosmetic = item.tags && item.tags.includes('cosmetic');
-		const tags = item.tags
-			.map(tagList =>	
-				tagList.map(formatTag).join(', ') || 'None'
-			)
-			.join(' __or__ ');
+		const fullTagList = item.tagSet.map(({ tags }) => tags);
+		const isCosmetic = fullTagList.flat().includes('cosmetic');
+		const tagSet = fullTagList
+			.map(tags => `\`${tags.map(formatTag).join(', ') || 'None'}\``)
+			.join(' or ');
 		if (item.category === 'weapon') {
 			description = [
-				`**Tags:** ${tags}`,
+				`**Tags:** ${tagSet}`,
 				`**Level:** ${item.level}`,
-				`**Type:** ${item.type.map(capitalize).join(' / ')}`,
+				`**Type:** ${capitalize(item.type)}`,
 				...isCosmetic ? [] : [`**Damage:** ${item.damage.map(String).join('-') || 'Scaled'}`],
 				`**Element:** ${item.elements.map(capitalize).join(' / ')}`,
 				...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
@@ -238,7 +263,7 @@ exports.commands = {
 			}
 		} else if (item.category === 'accessory') {
 			description = [
-				`**Tags:** ${tags}`,
+				`**Tags:** ${tagSet}`,
 				`**Level:** ${item.level}`,
 				`**Type:** ${capitalize(item.type)}`,
 				...isCosmetic ? [] : [`**Bonuses:** ${formatBoosts(item.bonuses)}`],
@@ -346,10 +371,15 @@ exports.commands = {
 		items = await db.collection(process.env.DB_COLLECTION);
 
 		const filter = {
-			newField: { $exists: true, $ne: 0 },
+			customSortValue: { $exists: true, $ne: 0 },
 			category: itemType === 'weapon' ? 'weapon' : 'accessory',
 			...!isNaN(maxLevel) && { level: { $lte: maxLevel } },
-			$nor: [{ tags: 'default' }, { tags: { $all: ['temp', 'rare'] } }]
+			$nor: [
+				{ 'tagSet.tags': 'ak' },
+				{ 'tagSet.tags': 'alexander' },
+				{ 'tagSet.tags': { $all: ['temp', 'default'] } },
+				{ 'tagSet.tags': { $all: ['temp', 'rare'] } }
+			]
 		};
 		if (itemType === 'cape') filter.type = { $in: ['cape', 'wings'] };
 		else if (!(itemType in { 'accessory': 1, 'weapon': 1 })) filter.type = itemType;
@@ -377,21 +407,27 @@ exports.commands = {
 					resists: { $arrayToObject: '$resists' }
 				}
 			},
-			{ $addFields: { newField: mongoSortExp } },
+			{ $addFields: { customSortValue: mongoSortExp } },
 			{ $match: filter },
-			{ $sort: { newField: sortOrder, level: -1 } },
-			// Remove documents that share the same pedia URL, only keep the max level version
-			{ $group: { _id: { link: '$link' }, doc: { $first: '$$CURRENT' } } },
-			// Remove documents that share the same item name
-			{ $group: { _id: { name: '$doc.name' }, doc: { $first: '$doc' } } },
-			// Group documents
+			{ $sort: { customSortValue: sortOrder, level: -1 } },
+			// Group documents that belong to the same family
 			{
 				$group: {
-					_id: '$doc.newField', newField: { $first: '$doc.newField' }, 
-					items: { $addToSet: { title: '$doc.title', level: '$doc.level', tags: '$doc.tags' } }
+					_id: { family: '$family' },
+					doc: { $first: '$$CURRENT' },
 				}
 			},
-			{ $sort: { newField: sortOrder, level: -1 } },
+			{ $sort: { 'doc.customSortValue': sortOrder, 'doc.level': -1 } },
+			{ $replaceRoot: { newRoot: '$doc' } },
+			// Group documents
+			{ $sort: { title: 1 } },
+			{
+				$group: {
+					_id: '$customSortValue', customSortValue: { $first: '$customSortValue' }, 
+					items: { $push: { title: '$title', level: '$level', tagSet: '$tagSet' } }
+				}
+			},
+			{ $sort: { customSortValue: sortOrder } },
 			{ $limit: 8 }
 		];
 		const results = items.aggregate(pipeline);
@@ -400,17 +436,29 @@ exports.commands = {
 		let itemGroup = null;
 		let index = 0;
 		while ((itemGroup = (await results.next())) !== null) {
-			if (index > 1)
-				itemGroup.items = itemGroup.items.filter(item => !(item.tags || []).includes('rare'));
-			if (!itemGroup.items.length) continue;
+			// Do not list items beyond the first 2 item groups whose variants are all rare
+			let items = itemGroup.items;
+			if (index > 1) items = items
+				.filter(item =>
+					item.tagSet.filter(({ tags }) => tags.includes('rare')).length !== item.tagSet.length
+				);
+			if (!items.length) continue;
 
-			const items = itemGroup.items.map(item => {
-				const tags = item.tags ? `[${item.tags.map(capitalize).join(', ')}]` : '';
-				return `${item.title} _(lv. ${item.level})_ ${tags}`.trim();
-			});
-			const message = `**${++index})** ${items.join(' / ')} **_(${itemGroup.newField})_**\n\n`;
+			items = items
+				.map(item => {
+					let tags = item.tagSet
+						.map(({ tags }) => tags.length ? tags.map(capitalize).join('+') : 'None')
+						.join(' / ');
+					tags = tags === 'None' ? '' : `[${tags}]`;
+					return `\`${item.title}\` (lv. ${item.level}) ${tags}`.trim();
+				});
+
+			const sign = itemGroup.customSortValue < 0 ? '' : '+';
+			const message = `**${sign}${itemGroup.customSortValue}** ${items.join(', ')}\n\n`;
 			if (message.length + sorted.length > 2048) break;
 			sorted += message;
+
+			index += 1;
 		}
 
 		if (!sorted) return channel.send(embed('No results were found.'));
