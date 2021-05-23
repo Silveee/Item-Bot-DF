@@ -8,7 +8,6 @@ const { ExpressionParser, ProblematicExpressionError } = require('./expression-e
 const aliases = {
 	'adl': 'ancient dragonlord helm',
 	'adsoe': 'ancient dragon amulet scythe of the elements',
-	'ancient': 'ancient dragon amulet scythe of the elements',
 	'aya': 'summon gem ayauhnqui ex',
 	'ba': 'baltaels aventail',
 	'blod': 'blinding light of destiny',
@@ -45,6 +44,7 @@ const aliases = {
 	'ublod': 'ultimate blinding light of destiny',
 	'utbod': 'ultimate twin blades of destiny',
 	'ultimate scythe': 'ultimate dragon amulet scythe of elementals',
+	'unrav': 'unraveler',
 	'uok': 'ultra omniknight blade',
 	'ur mom': 'unsqueakable farce',
 	'vik': 'vanilla ice katana',
@@ -67,14 +67,14 @@ const CT = process.env.COMMAND_TOKEN;
  *   Resolves null if no item is found
  */
 async function getItem(itemName, existingQuery) {
-	itemName = sanitizeText(itemName);
-	if (itemName in aliases) itemName = aliases[itemName];
-	itemName = itemName.split(' ');
-	existingQuery.$text = { $search: `${itemName.map(word => `"${word}"`).join(' ')}` };
+	let sanitizedName = sanitizeText(itemName);
+	if (sanitizedName in aliases) sanitizedName = aliases[sanitizedName];
+	const itemNameFragments = sanitizedName.split(' ');
+	existingQuery.$text = { $search: `${itemNameFragments.map(word => `"${word}"`).join(' ')}` };
 
 	// Check if the query contains a roman numeral
 	const romanNumberRegex = /^(?:x{0,3})(ix|iv|v?i{0,3})$/i;
-	for (const word of itemName.slice(-2).reverse()) {
+	for (const word of itemNameFragments.slice(-2).reverse()) {
 		if (word.match(romanNumberRegex)) {
 			existingQuery.name = new RegExp(`(?: ${word} )|(?: ${word}$)`, 'i');
 			break;
@@ -86,22 +86,36 @@ async function getItem(itemName, existingQuery) {
 
 	const pipeline = [
 		{ $match: existingQuery },
+		// Get tags that all variations of the item will always have
+		{
+			$addFields: {
+				guaranteedTags: {
+					$reduce: {
+						input: '$tagSet.tags',
+						initialValue: [],
+						in: {
+							$cond: [
+								{ $eq: [{ $size: '$$value' }, 0] },
+								{ $concatArrays: ['$$value', '$$this'] },
+								{ $setIntersection: ['$$value', '$$this'] },
+							]
+						}
+					}
+				}
+			}
+		},
 		// Temporary items are given least priority, followed by special offer, DC, and then rare items
 		{
 			$addFields: {
 				priority: {
-					$switch: {
-						branches: [
-							{ case: { $in: ['temp', '$tagSet.tags'] }, then: -4 },
-							{ case: { $in: ['so', '$tagSet.tags'] }, then: -3 },
-							{ case: { $in: ['dc', '$tagSet.tags'] }, then: -2 },
-							{ case: { $in: ['rare', '$tagSet.tags'] }, then: -1 },
-						],
-						default: 0
-					}
+					$sum: [
+						{ $cond: [{ $in: ['temp', '$guaranteedTags'] }, -4, 0] },
+						{ $cond: [{ $in: ['so', '$guaranteedTags'] }, -3, 0] },
+						{ $cond: [{ $in: ['dc', '$guaranteedTags'] }, -2, 0] },
+						{ $cond: [{ $in: ['rare', '$guaranteedTags'] }, -1, 0] },
+					]
 				},
 				bonusSum: { $sum: '$bonuses.v' },
-				textScore: { $meta: 'textScore' },
 				combinedScore: {
 					$sum: [
 						{ $sum: '$bonuses.v' },
@@ -118,7 +132,11 @@ async function getItem(itemName, existingQuery) {
 			}
 		},
 		{ $replaceRoot: { newRoot: '$doc' } },
-		{ $sort: { textScore: -1, priority: -1, level: -1, bonusSum: -1 } },
+		// Prioritize exact matches
+		{
+			$addFields: { exactMatch: { $cond: [{ $eq: ['$name', sanitizedName] }, 1, 0 ] } }
+		},
+		{ $sort: { exactMatch: -1, combinedScore: -1, priority: -1 } },
 		{ $limit: 1 }
 	];
 	let results = items.aggregate(pipeline);
