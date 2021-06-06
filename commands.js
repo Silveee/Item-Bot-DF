@@ -5,7 +5,17 @@ const { capitalize, embed, formatTag, formatBoosts, sanitizeText, validTypes } =
 const connect = require('./db');
 const { ExpressionParser, ProblematicExpressionError } = require('./expression-evaluation');
 
-const aliases = {
+const fullWordAliases = {
+	'dm cannon': 'defender cannon',
+	'drgn capacitor': 'drgn c4p4c170r',
+	'drgn claw': 'drgn c74w',
+	'drgn visor': 'drgn v1z0r',
+	'drgn vizor': 'drgn v1z0r',
+	'ur mom': 'unsqueakable farce',
+	'your mom': 'unsqueakable farce'
+};
+
+const singleWordAliases = {
 	'adl': 'ancient dragonlord helm',
 	'adsoe': 'ancient dragon amulet scythe of the elements',
 	'aya': 'summon gem ayauhnqui ex',
@@ -18,13 +28,11 @@ const aliases = {
 	'ddb': 'defenders dragon belt',
 	'ddn': 'defenders dragon necklace',
 	'ddr': 'defenders dragon ring',
-	'ddsoe': 'doomed dragon amulet scythe of elementals',
+	'ddsoe': 'doomed dragon amulet scythe of the elements',
+	'ddsoe1': 'doomed dragon amulet scythe of elementals',
+	'ddsoe2': 'doomed dragon amulet scythe of the elements',
 	'ddv': 'distorted doom visage',
-	'dm cannon': 'defender cannon',
-	'drgn capacitor': 'drgn c4p4c170r',
-	'drgn claw': 'drgn c74w',
-	'drgn visor': 'drgn v1z0r',
-	'drgn vizor': 'drgn v1z0r',
+	'dsod': 'dragonstaff of destiny',
 	'eud': 'elemental unity defender',
 	'fc': 'frozen claymore',
 	'fdl': 'fierce dragonlord helm',
@@ -39,16 +47,14 @@ const aliases = {
 	'pdl': 'dragons patience',
 	'rdl': 'dragons rage',
 	'scc': 'sea chickens conquest',
-	'sf': 'soulforged scythe',
+	'sf': 'soulforged',
+	'tbod': 'twin blades of destiny',
 	'udsod': 'ultimate dragonstaff of destiny',
 	'ublod': 'ultimate blinding light of destiny',
 	'utbod': 'ultimate twin blades of destiny',
-	'ultimate scythe': 'ultimate dragon amulet scythe of elementals',
 	'unrav': 'unraveler',
 	'uok': 'ultra omniknight blade',
-	'ur mom': 'unsqueakable farce',
 	'vik': 'vanilla ice katana',
-	'your mom': 'unsqueakable farce'
 };
 
 const CT = process.env.COMMAND_TOKEN;
@@ -68,8 +74,8 @@ const CT = process.env.COMMAND_TOKEN;
  */
 async function getItem(itemName, existingQuery) {
 	let sanitizedName = sanitizeText(itemName);
-	if (sanitizedName in aliases) sanitizedName = aliases[sanitizedName];
-	const itemNameFragments = sanitizedName.split(' ');
+	if (sanitizedName in fullWordAliases) sanitizedName = fullWordAliases[sanitizedName];
+	const itemNameFragments = sanitizedName.split(' ').map(word => singleWordAliases[word] || word);
 	existingQuery.$text = { $search: `${itemNameFragments.map(word => `"${word}"`).join(' ')}` };
 
 	// Check if the query contains a roman numeral
@@ -121,7 +127,8 @@ async function getItem(itemName, existingQuery) {
 						{ $sum: '$bonuses.v' },
 						{ $multiply: ['$level', { $meta: 'textScore' }] }
 					]
-				}
+				},
+				textScore: { $multiply: ['$level', { $meta: 'textScore' }] }
 			}
 		},
 		{ $sort: { combinedScore: -1, priority: -1 } },
@@ -136,7 +143,7 @@ async function getItem(itemName, existingQuery) {
 		{
 			$addFields: { exactMatch: { $cond: [{ $eq: ['$name', sanitizedName] }, 1, 0 ] } }
 		},
-		{ $sort: { exactMatch: -1, combinedScore: -1, priority: -1 } },
+		{ $sort: { exactMatch: -1, textScore: -1, priority: -1, bonusSum: -1 } },
 		{ $limit: 1 }
 	];
 	let results = items.aggregate(pipeline);
@@ -478,4 +485,147 @@ exports.commands = {
 			)
 		).catch(() => channel.send('An error occured'));
 	},
+
+	// maxresgear: async function ({ channel }, args, commandName) {
+	// 	let [sortExp, maxLevel] = args
+	// 		.split(',')
+	// 		.map(arg => arg.trim().toLowerCase()) || [];
+	// 	if (!sortExp)
+	// 		return await channel.send(embed(
+	// 			`Usage: ${CT}${commandName} \`item type\`, \`sort expression\`, \`max level (optional)\`\n` +
+	// 			`\`item type\` - Valid types are: _${[...validTypes].join(', ')}_. ` +
+	// 			"Abbreviations such as 'acc' and 'wep' also work.\n" +
+	// 			'If you are searching for a weapon, you may prefix the `item type` with an element ' +
+	// 			'to only get results for weapons of that element\n' +
+	// 			'`sort expression` can either be a single value or multiple values joined together by ' +
+	// 			'+ and/or - signs and/or brackets (). These "values" can be any stat bonus or resistance ' +
+	// 			'_(eg. STR, Melee Def, Bonus, All, Ice, Health, etc.)_, or in the case of weapons, _Damage_. ' +
+	// 			'Examples: _All + Health_, _-Health_, _INT - (DEX + STR)_, etc.\n' +
+	// 			`\`${CT}sort\` sorts in descending order. Use \`${CT}sortasc\` to sort in ascending order instead.`
+	// 		));
+	// 	if (maxLevel && maxLevel.match(/[^\-0-9]/)) {
+	// 		return await channel.send(embed(`"${maxLevel}" is not a valid number.`));
+	// 	}
+	// 	if (sortExp.length > 100) {
+	// 		return await channel.send(embed('Your sort expression cannot be longer than 100 characters.'));
+	// 	}
+
+	// 	maxLevel = Number(maxLevel);
+	// 	if (maxLevel < 0 || maxLevel > 90) {
+	// 		return await channel.send(
+	// 			embed(`The max level should be a number between 0 and 90 inclusive. ${maxLevel} is not valid.`)
+	// 		);
+	// 	}
+
+	// 	const db = await connect();
+	// 	let items = null;
+	// 	items = await db.collection(process.env.DB_COLLECTION);
+
+	// 	const filter = {
+	// 		customSortValue: { $exists: true, $ne: 0 },
+	// 		...!isNaN(maxLevel) && { level: { $lte: maxLevel } },
+	// 		$nor: [
+	// 			{ 'tagSet.tags': 'ak' },
+	// 			{ 'tagSet.tags': 'alexander' },
+	// 			{ 'tagSet.tags': { $all: ['temp', 'default'] } },
+	// 			{ 'tagSet.tags': { $all: ['temp', 'rare'] } }
+	// 		]
+	// 	};
+	// 	if (itemType === 'cape') filter.type = { $in: ['cape', 'wings'] };
+	// 	else if (!(itemType in { 'accessory': 1, 'weapon': 1 })) filter.type = itemType;
+
+	// 	if (itemElement) filter.elements = itemElement;
+
+	// 	const sortOrder = commandName in { 'sortasc': 1, 'sortascending': 1 } ? 1 : -1;
+
+	// 	let expressionParser;
+	// 	try {
+	// 		expressionParser = new ExpressionParser(sortExp);
+	// 	} catch (err) {
+	// 		if (err instanceof ProblematicExpressionError) {
+	// 			return await channel.send(embed(err.message));
+	// 		}
+	// 		throw err;
+	// 	}
+	// 	const mongoSortExp = expressionParser.mongoExpression();
+
+	// 	const pipeline = [
+	// 		{
+	// 			$addFields: {
+	// 				damage: { $avg: '$damage' },
+	// 				bonuses: { $arrayToObject: '$bonuses' },
+	// 				resists: { $arrayToObject: '$resists' }
+	// 			}
+	// 		},
+	// 		{ $addFields: { customSortValue: mongoSortExp } },
+	// 		{ $match: filter },
+	// 		{ $sort: { customSortValue: sortOrder, level: -1 } },
+	// 		// Group documents that belong to the same family
+	// 		{
+	// 			$group: {
+	// 				_id: { family: '$family' },
+	// 				doc: { $first: '$$CURRENT' },
+	// 			}
+	// 		},
+	// 		{ $sort: { 'doc.customSortValue': sortOrder, 'doc.level': -1 } },
+	// 		{ $replaceRoot: { newRoot: '$doc' } },
+	// 		// Group documents
+	// 		{ $sort: { title: 1 } },
+	// 		{
+	// 			$group: {
+	// 				_id: '$customSortValue', customSortValue: { $first: '$customSortValue' }, 
+	// 				items: { $push: { title: '$title', level: '$level', tagSet: '$tagSet' } }
+	// 			}
+	// 		},
+	// 		{ $sort: { customSortValue: sortOrder } },
+	// 		{ $limit: 8 }
+	// 	];
+	// 	const results = items.aggregate(pipeline);
+
+	// 	let sorted = '';
+	// 	let itemGroup = null;
+	// 	let index = 0;
+	// 	while ((itemGroup = (await results.next())) !== null) {
+	// 		// Do not list items beyond the first 2 item groups whose variants are all rare
+	// 		let items = itemGroup.items;
+	// 		if (index > 1) items = items
+	// 			.filter(item =>
+	// 				item.tagSet.filter(({ tags }) => tags.includes('rare')).length !== item.tagSet.length
+	// 			);
+	// 		if (!items.length) continue;
+
+	// 		items = items
+	// 			.map(item => {
+	// 				let tags = item.tagSet
+	// 					.map(({ tags }) => tags.length ? tags.map(capitalize).join('+') : 'None')
+	// 					.join(' / ');
+	// 				tags = tags === 'None' ? '' : `[${tags}]`;
+	// 				return `\`${item.title}\` (lv. ${item.level}) ${tags}`.trim();
+	// 			});
+
+	// 		const sign = itemGroup.customSortValue < 0 ? '' : '+';
+	// 		const message = `**${sign}${itemGroup.customSortValue}** ${items.join(', ')}\n\n`;
+	// 		if (message.length + sorted.length > 2048) break;
+	// 		sorted += message;
+
+	// 		index += 1;
+	// 	}
+
+	// 	if (!sorted) return channel.send(embed('No results were found.'));
+
+	// 	let formattedItemType = '';
+	// 	if (itemType === 'accessory') formattedItemType = 'accessories';
+	// 	else formattedItemType = itemType.slice(-1) === 's' ? itemType : itemType + 's';
+	// 	formattedItemType = capitalize(formattedItemType);
+	// 	if (itemElement) formattedItemType = capitalize(itemElement) + ' ' + formattedItemType;
+
+	// 	const displayExpression = expressionParser.prettifyExpression();
+	// 	channel.send(
+	// 		embed(
+	// 			sorted.trim(),
+	// 			`Sort ${formattedItemType} by ${displayExpression}`,
+	// 			!isNaN(maxLevel) && maxLevel < 90 ? `Level capped at ${maxLevel} in results` : null
+	// 		)
+	// 	).catch(() => channel.send('An error occured'));
+	// },
 };
