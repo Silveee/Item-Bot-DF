@@ -2,7 +2,7 @@
 
 const { capitalize, embed, formatTag, formatBoosts, sanitizeText, validTypes } = require('./utils');
 
-const connect = require('./db');
+const connection = require('./db');
 const { ExpressionParser, ProblematicExpressionError } = require('./expression-evaluation');
 
 const fullWordAliases = {
@@ -87,8 +87,7 @@ async function getItem(itemName, existingQuery) {
 		}
 	}
 
-	const db = await connect();
-	const items = await db.collection(process.env.DB_COLLECTION);
+	const items = await connection.then(db => db.collection(process.env.DB_COLLECTION));
 
 	const pipeline = [
 		{ $match: existingQuery },
@@ -373,9 +372,7 @@ exports.commands = {
 			));
 		}
 
-		const db = await connect();
-		let items = null;
-		items = await db.collection(process.env.DB_COLLECTION);
+		const items = await connection.then(db => db.collection(process.env.DB_COLLECTION));
 
 		const filter = {
 			customSortValue: { $exists: true, $ne: 0 },
@@ -477,13 +474,15 @@ exports.commands = {
 		if (itemElement) formattedItemType = capitalize(itemElement) + ' ' + formattedItemType;
 
 		const displayExpression = expressionParser.prettifyExpression();
+		let footer = null;
+		if (itemGroup !== null || index === 8) {
+			footer = `Use the command "/sort ${itemType}" for more results`;
+		}
 		channel.send(
 			embed(
 				sorted.trim(),
 				`Sort ${formattedItemType} by ${displayExpression}`,
-				itemGroup !== null && itemType !== 'accessory' ?
-					`Use the command "/sort ${itemType}" for more results` :
-					null
+				footer
 			)
 		).catch(() => channel.send('An error occured'));
 	},

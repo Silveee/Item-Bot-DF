@@ -3,7 +3,7 @@
 const format = require('util').format;
 const MongoClient = require('mongodb').MongoClient;
 
-const connection = MongoClient.connect(
+module.exports = MongoClient.connect(
 	format(
 		'mongodb://%s:%s@%s:%s/?authMechanism=%s&authSource=%s',
 		process.env.DB_USER, process.env.DB_PASS, process.env.DB_HOST, process.env.DB_PORT,
@@ -13,12 +13,7 @@ const connection = MongoClient.connect(
 		useUnifiedTopology: true,
 		useNewUrlParser: true
 	}
-);
-
-module.exports = async () => {
-	const client = await connection;
-	return client.db(process.env.DB_NAME);
-};
+).then(client => client.db(process.env.DB_NAME));
 
 /*const sqlite = require('sqlite3').verbose();
 const db = sqlite.Database('./weapons.db');
