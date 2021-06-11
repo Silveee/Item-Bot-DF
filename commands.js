@@ -127,7 +127,6 @@ async function getItem(itemName, existingQuery) {
 						{ $multiply: ['$level', { $meta: 'textScore' }] }
 					]
 				},
-				textScore: { $multiply: ['$level', { $meta: 'textScore' }] }
 			}
 		},
 		{ $sort: { combinedScore: -1, priority: -1 } },
@@ -142,7 +141,7 @@ async function getItem(itemName, existingQuery) {
 		{
 			$addFields: { exactMatch: { $cond: [{ $eq: ['$name', sanitizedName] }, 1, 0 ] } }
 		},
-		{ $sort: { exactMatch: -1, textScore: -1, priority: -1, bonusSum: -1 } },
+		{ $sort: { exactMatch: -1, combinedScore: -1, priority: -1, bonusSum: -1 } },
 		{ $limit: 1 }
 	];
 	let results = items.aggregate(pipeline);
