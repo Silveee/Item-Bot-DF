@@ -3,7 +3,6 @@
 const { capitalize, embed, formatTag, formatBoosts, sanitizeText } = require('./utils');
 
 const connection = require('./db');
-// const { ExpressionParser, ProblematicExpressionError } = require('./expression-evaluation');
 
 const fullWordAliases = {
 	'dm cannon': 'defender cannon',
@@ -12,7 +11,9 @@ const fullWordAliases = {
 	'drgn visor': 'drgn v1z0r',
 	'drgn vizor': 'drgn v1z0r',
 	'ur mom': 'unsqueakable farce',
-	'your mom': 'unsqueakable farce'
+	'your mom': 'unsqueakable farce',
+	'1k wings': 'wings of the thousand flames',
+	'1k infernos': 'wings of the thousand infernos'
 };
 
 const singleWordAliases = {
@@ -121,9 +122,9 @@ async function getItem(itemName, existingQuery, strict=true) {
 				priority: {
 					$sum: [
 						{ $cond: [{ $in: ['temp', '$guaranteedTags'] }, -4, 0] },
-						{ $cond: [{ $in: ['so', '$guaranteedTags'] }, -3, 0] },
-						{ $cond: [{ $in: ['dc', '$guaranteedTags'] }, -2, 0] },
-						{ $cond: [{ $in: ['rare', '$guaranteedTags'] }, -1, 0] },
+						{ $cond: [{ $in: ['rare', '$guaranteedTags'] }, -3, 0] },
+						{ $cond: [{ $in: ['so', '$guaranteedTags'] }, -2, 0] },
+						{ $cond: [{ $in: ['dc', '$guaranteedTags'] }, -1, 0] },
 					]
 				},
 				bonusSum: { $sum: '$bonuses.v' },
@@ -148,7 +149,7 @@ async function getItem(itemName, existingQuery, strict=true) {
 		{
 			$addFields: { exactMatch: { $cond: [{ $eq: ['$name', sanitizedName] }, 1, 0 ] } }
 		},
-		{ $sort: { exactMatch: -1,  priority: -1, hasTextScore: -1, combinedScore: -1, bonusSum: -1 } },
+		{ $sort: { exactMatch: -1, priority: -1, hasTextScore: -1, combinedScore: -1, bonusSum: -1 } },
 		{ $limit: 1 }
 	];
 	let results = items.aggregate(pipeline);
@@ -327,7 +328,8 @@ exports.commands = {
 		});
 	},
 
-	fightgen: async function ({ channel }) {
+	bossgen: async function ({ channel }) {
+		// TODO: Refactor. I literally copy-pasted this
 		const array1 = new Array("You are a duo fight called","You are a solo fight called","You are an EX fight called","You are the boss of a dungeon called","You are an open world boss called","You are a gauntlet called","You are a regular quest mook named","You are the boss of a 1000 room dungeon called","You are one of a series of endless togs named","You are a trio fight called",'You are a quartet fight called');
 
 		const array2 = new Array("The Last Stand of","Super Mega Ultra","Inevitable","The","Doomed","Ehr'","Heretic","The One and Only","Larry","Fake","Rare","Gloom","Extreme","Very","Mega","Super","Ultra","Huge","Elemental","Pumpkin","The Doomed","The Chosen","Avatar of","Togmothy","Lord","The Nefarious","Dreamspace","Unfortunate","Displaced","Timetorn","Timewarped","Drahr'","Seer","Summoner","King","Swole","Chronomancer","True","Unreal","Ultimate","The Real","The Sequel to","Shadow","Slayer of","Queen","Princess","Prince","Necrotic","Unlucky","Caged","Baby","Titan","Defender's","Exalted","Ascended","Enhanced","Master","The Fallen","Challenger","Ancient","Eternal","Draconic");
