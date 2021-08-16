@@ -1,2 +1,2 @@
 # Item-Bot-DF
-This script is will be moved to [https://github.com/Silveee/Item-Tool-DF](Item-Tool-DF) soon
+This script will be moved to [Item-Tool-DF](https://github.com/Silveee/Item-Tool-DF) soon
