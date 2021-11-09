@@ -13,9 +13,6 @@
     "unescape": "^1.0.1",
     "utf-8-validate": "^5.0.2"
   },
-  "devDependencies": {
-    "eslint": "^7.24.0"
-  },
   "scripts": {
     "start": "node app.js",
     "scrape": "node scrape.js"
