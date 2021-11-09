@@ -55,6 +55,8 @@ const singleWordAliases = {
   nstb: "not so tiny bubbles",
   pdl: "dragons patience",
   rdl: "dragons rage",
+  bdl: "dragons bulwark",
+  wdl: "dragons wrath",
   scc: "sea chickens conquest",
   sf: "soulforged",
   tbod: "twin blades of destiny",
@@ -180,12 +182,20 @@ async function getItem(itemName, existingQuery, strict = true) {
         bonusSum: -1,
       },
     },
-    { $limit: 1 },
+    { $limit: 4 },
   ];
   let results = items.aggregate(pipeline);
   let item = await results.next();
+  if (!item) {
+    return { item: null, similarItems: [] };
+  }
 
-  return item;
+  const similarItems = [];
+  let otherItem;
+  while ((otherItem = await results.next()) !== null) {
+    similarItems.push(otherItem);
+  }
+  return { item, similarItems };
 }
 
 exports.commands = {
@@ -290,11 +300,12 @@ exports.commands = {
       }
     }
 
-    let item = await getItem(itemName, query);
-    if (!item) {
-      item = await getItem(itemName, query, false);
-      if (!item) return channel.send(embed("No item was found"));
+    let itemResults = await getItem(itemName, query);
+    if (!itemResults.item) {
+      itemResults = await getItem(itemName, query, false);
+      if (!itemResults.item) return channel.send(embed("No item was found"));
     }
+    let item = itemResults.item;
 
     const embedFields = [];
     let description = null;
@@ -359,6 +370,13 @@ exports.commands = {
           ],
           inline: true,
         });
+    }
+
+    if (itemResults.similarItems.length) {
+      const otherItemText = itemResults.similarItems
+        .map((similarItem) => `[${similarItem.title}](${similarItem.link})`)
+        .join(", ");
+      embedFields.push({ name: "Similar Results", value: otherItemText });
     }
 
     if (item.images && item.images.length > 1)
