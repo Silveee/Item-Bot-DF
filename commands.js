@@ -98,8 +98,10 @@ async function getItem(itemName, existingQuery, strict = true) {
 
   if (sanitizedName.length >= 3) {
     const noSpaceText = sanitizedName.replace(/ /g, "");
+    const splitText =
+      noSpaceText.slice(0, 3) + noSpaceText.slice(3).split("").join(" ?");
     const nameRegex = new RegExp(
-      noSpaceText.slice(0, 3) + noSpaceText.slice(3).split().join(" ?"),
+      `(?:^${splitText})|(?:${splitText}$)|(?: ${splitText} )`,
       "i"
     );
     existingQuery.$or = [{ $text: existingQuery.$text }, { name: nameRegex }];
@@ -159,7 +161,7 @@ async function getItem(itemName, existingQuery, strict = true) {
         hasTextScore: { $ceil: { $meta: "textScore" } },
       },
     },
-    { $sort: { priority: -1, combinedScore: -1 } },
+    { $sort: { priority: -1, level: -1, combinedScore: -1 } },
     {
       $group: {
         _id: "$family",
