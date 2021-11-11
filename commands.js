@@ -99,9 +99,11 @@ async function getItem(itemName, existingQuery, strict = true) {
   if (sanitizedName.length >= 3) {
     const noSpaceText = sanitizedName.replace(/ /g, "");
     const splitText =
-      noSpaceText.slice(0, 3) + noSpaceText.slice(3).split("").join(" ?");
+      noSpaceText.slice(0, 3) +
+      " ?" +
+      noSpaceText.slice(3).split("").join(" ?");
     const nameRegex = new RegExp(
-      `(?:^${splitText})|(?:${splitText}$)|(?: ${splitText} )`,
+      `(?:^${splitText})|(?:${splitText}$)|(?: ${splitText})|(?:${splitText} )`,
       "i"
     );
     existingQuery.$or = [{ $text: existingQuery.$text }, { name: nameRegex }];
