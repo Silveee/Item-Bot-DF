@@ -124,34 +124,35 @@ async function getItem(itemName, existingQuery, strict = true) {
 
   const pipeline = [
     { $match: existingQuery },
-    // Get tags that all variations of the item will always have
-    {
-      $addFields: {
-        guaranteedTags: {
-          $reduce: {
-            input: "$tagSet.tags",
-            initialValue: [],
-            in: {
-              $cond: [
-                { $eq: [{ $size: "$$value" }, 0] },
-                { $concatArrays: ["$$value", "$$this"] },
-                { $setIntersection: ["$$value", "$$this"] },
-              ],
-            },
-          },
-        },
-      },
-    },
     // Temporary items are given least priority, followed by special offer, DC, and then rare items
     {
       $addFields: {
         priority: {
-          $sum: [
-            { $cond: [{ $in: ["temp", "$guaranteedTags"] }, -4, 0] },
-            { $cond: [{ $in: ["rare", "$guaranteedTags"] }, -3, 0] },
-            { $cond: [{ $in: ["so", "$guaranteedTags"] }, -2, 0] },
-            { $cond: [{ $in: ["dc", "$guaranteedTags"] }, -1, 0] },
-          ],
+          $max: {
+            $map: {
+              input: "$tagSet.tags",
+              as: "tags",
+              in: {
+                $sum: {
+                  $map: {
+                    input: "$$tags",
+                    as: "tag",
+                    in: {
+                      $switch: {
+                        branches: [
+                          { case: { $eq: ["$$tag", "temp"] }, then: -4 },
+                          { case: { $eq: ["$$tag", "rare"] }, then: -3 },
+                          { case: { $eq: ["$$tag", "so"] }, then: -2 },
+                          { case: { $eq: ["$$tag", "dc"] }, then: -1 },
+                        ],
+                        default: 0,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
         bonusSum: { $sum: "$bonuses.v" },
         combinedScore: {
