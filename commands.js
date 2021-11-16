@@ -299,12 +299,6 @@ exports.commands = {
       );
     }
 
-    if (input.match(/[^a-zA-Z0-9 \-\|'"‘’“”]/)) {
-      return channel.send(
-        embed("The search query cannot contain special characters.")
-      );
-    }
-
     const query = {};
 
     const mongoOperatorMapping = {
@@ -349,6 +343,12 @@ exports.commands = {
       }
 
       query.level = { [mongoOperatorMapping[operator]]: levelFilter };
+    }
+
+    if (itemName.match(/[^a-zA-Z0-9 \-\|'"‘’“”]/)) {
+      return channel.send(
+        embed("The search query cannot contain special characters.")
+      );
     }
 
     if (commandName !== "item") {
