@@ -8,7 +8,10 @@ const {
   sanitizeText,
 } = require("./utils");
 
+const searchBuilder = require("./search-builder");
 const connection = require("./db");
+
+const searchIndex = searchBuilder.build();
 
 const fullWordAliases = {
   "dm cannon": "defender cannon",
@@ -83,37 +86,69 @@ const CT = process.env.COMMAND_TOKEN;
  *   Promise that resolves an object containing the details of the item or the closest match.
  *   Resolves null if no item is found
  */
-async function getItem(itemName, existingQuery, strict = true) {
+async function getItem(itemName, existingQuery, fuzzy = false) {
   let sanitizedName = sanitizeText(itemName);
   if (sanitizedName in fullWordAliases)
     sanitizedName = fullWordAliases[sanitizedName];
   const itemNameFragments = sanitizedName
     .split(" ")
     .map((word) => singleWordAliases[word] || word);
-  existingQuery.$text = {
-    $search: `${itemNameFragments
-      .map((word) => (strict ? `"${word}"` : word))
-      .join(" ")}`,
-  };
 
-  if (sanitizedName.length >= 3) {
-    const noSpaceText = sanitizedName.replace(/ /g, "");
-    const splitText =
-      noSpaceText.slice(0, 3) +
-      " ?" +
-      noSpaceText.slice(3).split("").join(" ?");
-    const nameRegex = new RegExp(
-      `(?:^${splitText})|(?:${splitText}$)|(?: ${splitText})|(?:${splitText} )`,
-      "i"
+  let searchResults;
+  let searchScores;
+  delete existingQuery.$text;
+  delete existingQuery.$or;
+  delete existingQuery.$and;
+  if (!fuzzy) {
+    existingQuery.$text = {
+      $search: `${itemNameFragments.map((word) => `"${word}"`).join(" ")}`,
+    };
+
+    if (sanitizedName.length >= 3) {
+      const noSpaceText = sanitizedName.replace(/ /g, "");
+      const splitText =
+        noSpaceText.slice(0, 3) +
+        " ?" +
+        noSpaceText.slice(3).split("").join(" ?");
+      const nameRegex = new RegExp(
+        `(?:^${splitText})|(?:${splitText}$)|(?: ${splitText})|(?:${splitText} )`,
+        "i"
+      );
+      existingQuery.$or = [{ $text: existingQuery.$text }, { name: nameRegex }];
+      delete existingQuery.$text;
+    }
+  } else {
+    searchResults = searchIndex.search(
+      itemNameFragments
+        .map((name) => {
+          if (name.length <= 3) return name;
+          if (name.length <= 4) return name + "~1";
+          if (name.length <= 5) return name + "~2";
+          if (name.length <= 9) return `+${name}~2`;
+          return `+${name}~3`;
+        })
+        .join(" ")
     );
-    existingQuery.$or = [{ $text: existingQuery.$text }, { name: nameRegex }];
-    delete existingQuery.$text;
+    existingQuery.name = { $in: searchResults.map((result) => result.ref) };
+    searchScores = {};
+    for (const result of searchResults) {
+      searchScores[result.ref] = result.score;
+    }
   }
   // Check if the query contains a roman numeral
   const romanNumberRegex = /^(?:x{0,3})(ix|iv|v?i{0,3})$/i;
   for (const word of itemNameFragments.slice(-2).reverse()) {
     if (word.match(romanNumberRegex)) {
-      existingQuery.name = new RegExp(`(?: ${word} )|(?: ${word}$)`, "i");
+      const expression = new RegExp(`(?: ${word} )|(?: ${word}$)`, "i");
+      if (existingQuery.name) {
+        existingQuery.$and = [
+          { name: existingQuery.name },
+          { name: expression },
+        ];
+        delete existingQuery.name;
+      } else {
+        existingQuery.name = expression;
+      }
       break;
     }
   }
@@ -124,6 +159,30 @@ async function getItem(itemName, existingQuery, strict = true) {
 
   const pipeline = [
     { $match: existingQuery },
+    ...(fuzzy
+      ? [
+          {
+            $addFields: {
+              textScore: {
+                $let: {
+                  vars: { searchResults },
+                  in: {
+                    $filter: {
+                      input: "$$searchResults",
+                      cond: { $eq: ["$$this.ref", "$name"] },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          {
+            $addFields: {
+              textScore: { $arrayElemAt: ["$textScore.score", 0] },
+            },
+          },
+        ]
+      : [{ $addFields: { textScore: { $meta: "textScore" } } }]),
     // Temporary items are given least priority, followed by special offer, DC, and then rare items
     {
       $addFields: {
@@ -158,10 +217,10 @@ async function getItem(itemName, existingQuery, strict = true) {
         combinedScore: {
           $sum: [
             { $sum: "$bonuses.v" },
-            { $multiply: ["$level", { $meta: "textScore" }] },
+            { $multiply: ["$level", "$textScore"] },
           ],
         },
-        hasTextScore: { $ceil: { $meta: "textScore" } },
+        hasTextScore: { $ceil: "$textScore" },
       },
     },
     { $sort: { priority: -1, level: -1, combinedScore: -1 } },
@@ -240,6 +299,12 @@ exports.commands = {
       );
     }
 
+    if (input.match(/[^a-zA-Z0-9 \-\|'"‘’“”]/)) {
+      return channel.send(
+        embed("The search query cannot contain special characters.")
+      );
+    }
+
     const query = {};
 
     const mongoOperatorMapping = {
@@ -307,7 +372,7 @@ exports.commands = {
 
     let itemResults = await getItem(itemName, query);
     if (!itemResults.item) {
-      itemResults = await getItem(itemName, query, false);
+      itemResults = await getItem(itemName, query, true);
       if (!itemResults.item) return channel.send(embed("No item was found"));
     }
     let item = itemResults.item;
