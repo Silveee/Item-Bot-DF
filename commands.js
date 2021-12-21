@@ -121,14 +121,29 @@ async function getItem(itemName, existingQuery, fuzzy = false) {
     searchResults = searchIndex.search(
       itemNameFragments
         .map((name) => {
-          if (name.length <= 3) return name;
-          if (name.length <= 4) return name + "~1";
-          if (name.length <= 5) return name + "~2";
-          if (name.length <= 9) return `+${name}~2`;
-          return `+${name}~3`;
+          if (name === "blade") return "blade sword dagger knife";
+          if (name in { dagger: 1, knife: 1 }) return "dagger knife blade";
+          if (name === "sword") return "blade sword";
+          if (name === "staff") return "staff stave";
+          if (name.length <= 2) return name;
+          if (name.length <= 3) return `${name}~1`;
+          if (name.length <= 5) return `+${name}~1`;
+          return `+${name[0]}+${name.slice(1)}~2`;
         })
         .join(" ")
     );
+    // if (!searchResults.length) {
+    //   searchResults = searchIndex.search(
+    //     itemNameFragments
+    //       .map((name) => {
+    //         if (name.length <= 3) return name;
+    //         if (name.length <= 4) return name + "~1";
+    //         if (name.length <= 9) return `+${name[0]}+${name.slice(1)}~2`;
+    //         return `+${name[0]}+${name.slice(1)}~3`;
+    //       })
+    //       .join(" ")
+    //   );
+    // }
     existingQuery.name = { $in: searchResults.map((result) => result.ref) };
     searchScores = {};
     for (const result of searchResults) {
@@ -220,7 +235,7 @@ async function getItem(itemName, existingQuery, fuzzy = false) {
             { $multiply: ["$level", "$textScore"] },
           ],
         },
-        hasTextScore: { $ceil: "$textScore" },
+        hasTextScore: { $cond: [{ $gt: ["$textScore", 0] }, 1, 0] },
       },
     },
     { $sort: { priority: -1, level: -1, combinedScore: -1 } },
