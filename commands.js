@@ -128,7 +128,7 @@ async function getItem(itemName, existingQuery, fuzzy = false) {
           if (name.length <= 2) return name;
           if (name.length <= 3) return `${name}~1`;
           if (name.length <= 5) return `+${name}~1`;
-          return `+${name[0]}+${name.slice(1)}~2`;
+          return `+${name}~2`;
         })
         .join(" ")
     );
