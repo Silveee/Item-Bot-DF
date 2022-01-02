@@ -360,7 +360,7 @@ exports.commands = {
       query.level = { [mongoOperatorMapping[operator]]: levelFilter };
     }
 
-    if (itemName.match(/[^a-zA-Z0-9 \-\|'"‘’“”]/)) {
+    if (itemName.match(/[^a-zA-Z0-9 \-\|'"‘’“”().,]/)) {
       return channel.send(
         embed("The search query cannot contain special characters.")
       );
