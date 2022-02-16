@@ -21,11 +21,11 @@ const fullWordAliases = {
   "drgn vizor": "drgn v1z0r",
   "ur mom": "unsqueakable farce",
   "your mom": "unsqueakable farce",
-  "1k wings": "wings of the thousand flames",
-  "1k infernos": "wings of the thousand infernos",
 };
 
 const singleWordAliases = {
+  k: "thousand",
+  "1k": "thousand",
   adl: "ancient dragonlord helm",
   adsoe: "ancient dragon amulet scythe of the elements",
   aya: "summon gem ayauhnqui ex",
@@ -101,7 +101,9 @@ async function getItem(itemName, existingQuery, fuzzy = false) {
   delete existingQuery.$and;
   if (!fuzzy) {
     existingQuery.$text = {
-      $search: `${itemNameFragments.map((word) => `"${word}"`).join(" ")}`,
+      $search: `${itemNameFragments
+        .map((word) => (word.length < 3 ? word : `"${word}"`))
+        .join(" ")}`,
     };
 
     if (sanitizedName.length >= 3) {
