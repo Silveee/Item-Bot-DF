@@ -216,11 +216,31 @@ async function getItem(itemName, existingQuery, fuzzy = false) {
                     in: {
                       $switch: {
                         branches: [
-                          { case: { $eq: ["$$tag", "temp"] }, then: -4 },
-                          { case: { $eq: ["$$tag", "rare"] }, then: -3 },
-                          { case: { $eq: ["$$tag", "so"] }, then: -2 },
-                          { case: { $eq: ["$$tag", "dc"] }, then: -1 },
+                          { case: { $eq: ["$$tag", "temp"] }, then: -2 },
+                          { case: { $eq: ["$$tag", "rare"] }, then: -1 },
                         ],
+                        default: 0,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        needs_dc: {
+          $min: {
+            $map: {
+              input: "$tagSet.tags",
+              as: "tags",
+              in: {
+                $sum: {
+                  $map: {
+                    input: "$$tags",
+                    as: "tag",
+                    in: {
+                      $switch: {
+                        branches: [{ case: { $eq: ["$$tag", "dc"] }, then: 1 }],
                         default: 0,
                       },
                     },
@@ -240,7 +260,7 @@ async function getItem(itemName, existingQuery, fuzzy = false) {
         hasTextScore: { $cond: [{ $gt: ["$textScore", 0] }, 1, 0] },
       },
     },
-    { $sort: { priority: -1, level: -1, combinedScore: -1 } },
+    { $sort: { priority: -1, level: -1, combinedScore: -1, needs_dc: 1 } },
     {
       $group: {
         _id: "$family",
@@ -261,6 +281,7 @@ async function getItem(itemName, existingQuery, fuzzy = false) {
         hasTextScore: -1,
         combinedScore: -1,
         bonusSum: -1,
+        needs_dc: 1,
       },
     },
     { $limit: 4 },
